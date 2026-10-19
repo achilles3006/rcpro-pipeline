@@ -1,0 +1,16 @@
+[project]
+name = "rcpro-pipeline"
+version = "0.0.1"
+description = "KBO and register intake, classification and outreach preparation for RC pro leads"
+requires-python = ">=3.11"
+dependencies = ["duckdb"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

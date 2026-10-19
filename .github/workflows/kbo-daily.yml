@@ -1,0 +1,14 @@
+# Placeholder. The daily run (07:17 UTC) is not enabled here yet:
+# 1. KBO SFTP access is not granted.
+# 2. The DuckDB file must live in private storage, never in git.
+# Enable the schedule once both are in place.
+name: kbo-daily
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "17 7 * * *"
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Not enabled. See .github/workflows/kbo-daily.yml"
