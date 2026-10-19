@@ -26,7 +26,7 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 
 1. No personal data in git. The DuckDB file and extracts live in private storage. `data/` is ignored.
 2. Sole traders get no name in any table until the legal question on KBO reuse is answered.
-3. A website or register match is accepted only with proof (enterprise number). A name match alone never counts.
+3. Website and register matches carry a confidence level (verified, probable, weak) instead of a pass/fail. Missing a real prospect costs more than a wrong match, so probable matches are used; weak matches go to manual review.
 4. LLM steps must answer "unknown" without evidence and list the evidence used.
 
 ## Layout
