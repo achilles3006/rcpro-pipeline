@@ -17,7 +17,7 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 |---|---|---|---|
 | 1 | `rcpro.kbo`, `rcpro.leads` | Load KBO full extract and daily updates into DuckDB, build leads per segment with a legal flag | Built, tested on synthetic data; real extract not run yet |
 | 1 | `rcpro.register` | Detect new registrations in the Order of Architects register | Not started, needs legal sign-off |
-| 2 | `rcpro.classify` | Rules plus LLM step: is the activity mandatory (yes, likely, unlikely, unknown) | Rules built (run by `leads`), LLM step not built |
+| 2 | `rcpro.classify` | Rules plus LLM step: is the activity mandatory (yes, likely, unlikely, unknown) | Rules built (run by `leads`); LLM step weekly by hand in Claude Code |
 | 2 | `rcpro.websites` | Website discovery, accepted only with enterprise number match | Built elsewhere, untested |
 | 3 | n/a | Compliance gate | Not started |
 | 4 | n/a | Playbook, templates, needs analysis | Written in Notion |
@@ -62,3 +62,14 @@ pytest
 ```
 
 Segment codes and their priority live in `SEGMENTS` in `src/rcpro/leads.py`.
+
+### Weekly: LLM step for unknown engineers (Claude Code, no API key)
+
+```
+python -m rcpro export-unknown data/unknown.jsonl
+cat data/unknown.jsonl | claude -p --model haiku "$(cat prompts/classify_engineers.md)" > data/llm.jsonl
+python -m rcpro import-llm data/llm.jsonl
+python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
+```
+
+The export holds codes and company names only, never sole traders' names. Answers are kept in `llm_classification`, so each week only new unknown engineers are exported. An answer without evidence is stored as unknown, and one bad line stops the whole import.

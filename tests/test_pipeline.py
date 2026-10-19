@@ -103,3 +103,41 @@ def test_codes_flags_unknown_code(con):
     found = {code: desc for _, code, desc in leads.codes(con)}
     assert found["71111"] == "Architecten"
     assert found["71121"] is None
+
+
+def test_llm_round_trip(con, tmp_path):
+    con.execute("""INSERT INTO enterprise (EnterpriseNumber, Status, TypeOfEnterprise, StartDate) VALUES
+        ('0800.000.004', 'AC', '2', '07-01-2026'), ('0800.000.005', 'AC', '1', '07-01-2026')""")
+    con.execute("""INSERT INTO activity (EntityNumber, NaceVersion, NaceCode, Classification) VALUES
+        ('0800.000.004', '2025', '71121', 'MAIN'), ('0800.000.004', '2025', '70200', 'SECO'),
+        ('0800.000.005', '2025', '71121', 'MAIN')""")
+    con.execute("INSERT INTO denomination VALUES ('0800.000.004', '2', '001', 'Stabiliteit BV'), "
+                "('0800.000.005', '2', '001', 'Piet Janssens')")
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+
+    out = tmp_path / "unknown.jsonl"
+    assert classify.export_unknown(con, out) == 2
+    text = out.read_text()
+    assert "Stabiliteit BV" in text and "Piet Janssens" not in text  # never a sole trader's name
+
+    answers = tmp_path / "llm.jsonl"
+    answers.write_text(
+        "```json\n"
+        '{"enterprise_number": "0800.000.004", "mandatory": "likely", "evidence": ["name: Stabiliteit"]}\n'
+        '{"enterprise_number": "0800.000.005", "mandatory": "unlikely", "evidence": []}\n'  # no evidence
+        "```\n"
+    )
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text('{"enterprise_number": "0800.000.001", "mandatory": "yes"}\n')
+    with pytest.raises(ValueError, match="Nothing imported"):
+        classify.import_llm(con, bad)
+
+    assert classify.import_llm(con, answers) == 2
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+    rows = {r[0]: r[1:] for r in con.execute(
+        "SELECT enterprise_number, mandatory, evidence, legal_basis FROM leads WHERE segment = 'engineers'").fetchall()}
+    assert rows["0800.000.004"] == ("likely", ["llm: name: Stabiliteit"], classify.ACT_2019)
+    assert rows["0800.000.005"] == ("unknown", [], None)
+    assert classify.export_unknown(con, out) == 0  # already seen by the LLM
