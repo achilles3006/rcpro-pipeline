@@ -16,6 +16,9 @@ from pathlib import Path
 
 import duckdb
 
+# Only these files are loaded; anything else in the folder is ignored.
+KBO_TABLES = ("meta", "code", "enterprise", "establishment", "denomination", "address", "contact", "activity", "branch")
+
 
 @contextmanager
 def _unpacked(path):
@@ -61,8 +64,9 @@ def load_full(con, path):
     with _unpacked(path) as folder:
         number = _extract_number(folder)
         with _transaction(con):
-            for f in sorted(folder.glob("*.csv")):
-                con.execute(f"CREATE OR REPLACE TABLE {f.stem} AS SELECT * FROM {_csv(f)}")
+            for name in KBO_TABLES:
+                if (f := folder / f"{name}.csv").exists():
+                    con.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT * FROM {_csv(f)}")
             con.execute("CREATE OR REPLACE TABLE extract_log (extract_number INTEGER, kind VARCHAR, applied_at TIMESTAMP)")
             con.execute("INSERT INTO extract_log VALUES (?, 'full', now())", [number])
     return number

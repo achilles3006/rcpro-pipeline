@@ -12,6 +12,7 @@ FULL = {
         "0800.000.001,AC,000,2,610,,05-01-2026\n"  # architect company
         "0800.000.002,AC,000,1,,,06-01-2026\n"  # architect sole trader
         "0800.000.003,AC,000,2,610,,01-01-2020\n"  # architect, too old
+        "0800.000.006,AC,000,2,610,,08-01-2026\n"  # architect via subcode
     ),
     "establishment.csv": "EstablishmentNumber,StartDate,EnterpriseNumber\n2.000.000.002,06-01-2026,0800.000.002\n",
     "activity.csv": (
@@ -20,6 +21,7 @@ FULL = {
         "0800.000.001,001,2025,71121,MAIN\n"  # second segment: must not create a second row
         "2.000.000.002,001,2025,71111,MAIN\n"  # activity on the establishment only
         "0800.000.003,001,2025,71111,MAIN\n"
+        "0800.000.006,001,2025,7111102,MAIN\n"  # subcode of 71111
     ),
     "denomination.csv": (
         "EntityNumber,Language,TypeOfDenomination,Denomination\n"
@@ -87,15 +89,15 @@ def test_failed_update_rolls_back(con, tmp_path):
 
 
 def test_leads(con):
-    assert leads.build_leads(con, "2025-10-01") == 2
+    assert leads.build_leads(con, "2025-10-01") == 3
     rows = {r[0]: r[1:] for r in con.execute(
         "SELECT enterprise_number, segment, legal_form_type, name, postcode, has_email, dm_allowed_from_kbo FROM leads"
     ).fetchall()}
     assert rows["0800.000.001"] == ("architects", "company", "Studio A", "9000", False, True)
     assert rows["0800.000.002"] == ("architects", "sole_trader", None, None, True, False)  # no name for sole traders
     classify.classify(con)
-    assert con.execute("SELECT DISTINCT mandatory, evidence, needs_review FROM leads").fetchall() == [
-        ("yes", ["71111 MAIN"], False)
+    assert con.execute("SELECT DISTINCT mandatory, evidence, needs_review FROM leads ORDER BY ALL").fetchall() == [
+        ("yes", ["71111 MAIN"], False), ("yes", ["7111102 MAIN"], False)
     ]
 
 

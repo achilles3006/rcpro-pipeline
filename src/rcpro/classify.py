@@ -33,10 +33,10 @@ FIXED = {
 
 # Engineers (71121) fall under the 2019 Act only for real estate works.
 # ponytail: prefix rules from phase 2, calibrate against the phase 5 labelled sample.
-CONSTRUCTION = ("41", "42", "43", "7111", "71122")  # building, civil works, architecture, surveying
-NOT_CONSTRUCTION = tuple(str(n) for n in range(10, 34)) + ("35", "61", "62", "63")  # industry, energy, telecom, IT
+CONSTRUCTION = ("41", "42", "43", "7111", "71122", "7112104", "7112111")  # building, civil works, architecture, surveying, building economists
+NOT_CONSTRUCTION = tuple(str(n) for n in range(10, 34)) + ("35", "61", "62", "63", "7112101", "7112102", "7112105")  # industry, energy, telecom, IT, industrial engineering and design, geology
 
-SEGMENT_CODES = {segment: set(codes) for segment, _, codes in SEGMENTS}
+SEGMENT_CODES = {segment: tuple(codes) for segment, _, codes in SEGMENTS}
 
 
 def classify_one(segment, codes):
@@ -46,7 +46,7 @@ def classify_one(segment, codes):
 
     if segment != "engineers":
         mandatory, legal_basis = FIXED[segment]
-        return mandatory, evidence(lambda c: c in SEGMENT_CODES[segment]), legal_basis
+        return mandatory, evidence(lambda c: c.startswith(SEGMENT_CODES[segment])), legal_basis
     if found := evidence(lambda c: c.startswith(CONSTRUCTION)):
         return "likely", found, ACT_2019
     if found := evidence(lambda c: c.startswith(NOT_CONSTRUCTION)):

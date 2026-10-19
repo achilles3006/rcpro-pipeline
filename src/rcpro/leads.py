@@ -10,9 +10,9 @@ presence flags, `dm_allowed_from_kbo` and `sales_angle`
 SEGMENTS = [
     ("architects", "legal_obligation", ["71111"]),
     ("interior_architects", "legal_obligation", ["71112"]),
-    ("land_surveyors", "legal_obligation", ["71122"]),
     ("urban_landscape", "legal_obligation", ["71113", "71119"]),
     ("engineers", "legal_obligation", ["71121"]),  # needs classification (rcpro.classify)
+    ("land_surveyors", "legal_obligation", ["71122"]),
     ("accountants", "legal_obligation", ["69201", "69202"]),  # prospect or partner
     ("psychologists", "legal_unconfirmed", ["86931", "86932"]),
     ("management_consultants", "commercial_need", ["70200"]),
@@ -46,7 +46,7 @@ def build_leads(con, since):
             SELECT e.ent, arg_min(s.segment, s.priority) AS segment, arg_min(s.sales_angle, s.priority) AS sales_angle
             FROM activity a
             JOIN entity e ON a.EntityNumber = e.entity
-            JOIN segment s ON a.NaceCode = s.code
+            JOIN segment s ON starts_with(a.NaceCode, s.code)  -- includes 7-digit subcodes (7111101)
             WHERE a.Classification = 'MAIN' AND a.NaceVersion = '2025'
             GROUP BY e.ent
         ),

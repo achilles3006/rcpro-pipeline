@@ -19,3 +19,9 @@ def test_engineer_industry_only_is_unlikely():
 def test_engineer_generic_codes_stay_unknown_without_evidence():
     codes = [("71121", "MAIN"), ("70200", "SECO"), ("71209", "SECO")]
     assert classify_one("engineers", codes) == ("unknown", [], None)
+
+
+def test_subcodes_count():
+    assert classify_one("architects", [("7111102", "MAIN")])[0] == "yes"
+    assert classify_one("engineers", [("7112104", "MAIN")])[0] == "likely"
+    assert classify_one("engineers", [("7112101", "MAIN")])[0] == "unlikely"

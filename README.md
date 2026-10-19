@@ -45,9 +45,11 @@ data/           local only, ignored
 ## Setup
 
 ```
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv ~/.venvs/rcpro-pipeline && source ~/.venvs/rcpro-pipeline/bin/activate
 pip install -e ".[dev]"
 ```
+
+Keep the venv outside iCloud-synced folders (Desktop, Documents): iCloud marks files in dot-folders hidden, and Python 3.13 then skips the editable install.
 
 ## Usage
 
