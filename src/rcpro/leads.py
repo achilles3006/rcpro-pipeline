@@ -2,7 +2,9 @@
 
 Output: one row per business with segment, legal form type, postcode, contact
 presence flags, `dm_allowed_from_kbo` and `sales_angle`
-(legal_obligation, legal_unconfirmed, commercial_need, no_outreach; see docs/segments.md). Sole traders carry no name.
+(legal_obligation, legal_unconfirmed, commercial_need, no_outreach; see docs/segments.md).
+Companies also get name, municipality, e-mail, phone and website from KBO.
+Sole traders get flags only: no name and no contact values (KBO direct marketing ban).
 """
 
 # (segment, sales_angle, NACE-BEL 2025 main codes). Order is priority: a business
@@ -22,6 +24,10 @@ SEGMENTS = [
 ]
 
 
+# KBO JuridicalForm code -> usual abbreviation. Other codes show the KBO description.
+LEGAL_FORMS = {"610": "BV", "612": "CommV", "011": "VOF", "014": "NV", "706": "CV", "017": "VZW", "125": "IVZW"}
+
+
 def _segment_rows():
     return [(code, seg, angle, i) for i, (seg, angle, codes) in enumerate(SEGMENTS) for code in codes]
 
@@ -34,6 +40,8 @@ def _segment_table(con):
 def build_leads(con, since):
     """(Re)build the `leads` table for businesses started on or after `since` (YYYY-MM-DD)."""
     _segment_table(con)
+    con.execute("CREATE OR REPLACE TEMP TABLE legal_form (code VARCHAR, short VARCHAR)")
+    con.executemany("INSERT INTO legal_form VALUES (?, ?)", list(LEGAL_FORMS.items()))
     con.execute("""
         CREATE OR REPLACE VIEW entity AS  -- activities and contacts sit on the enterprise or on its establishments
         SELECT EnterpriseNumber AS entity, EnterpriseNumber AS ent FROM enterprise
@@ -54,7 +62,10 @@ def build_leads(con, since):
             SELECT e.ent,
                    bool_or(c.ContactType = 'EMAIL') AS has_email,
                    bool_or(c.ContactType = 'TEL') AS has_phone,
-                   bool_or(c.ContactType = 'WEB') AS has_website
+                   bool_or(c.ContactType = 'WEB') AS has_website,
+                   string_agg(DISTINCT c.Value, '; ') FILTER (c.ContactType = 'EMAIL') AS email,
+                   string_agg(DISTINCT c.Value, '; ') FILTER (c.ContactType = 'TEL') AS phone,
+                   string_agg(DISTINCT c.Value, '; ') FILTER (c.ContactType = 'WEB') AS website
             FROM contact c JOIN entity e ON c.EntityNumber = e.entity
             GROUP BY e.ent
         )
@@ -65,19 +76,28 @@ def build_leads(con, since):
             p.sales_angle,
             CASE WHEN en.TypeOfEnterprise = '1' THEN 'sole_trader' ELSE 'company' END AS legal_form_type,
             en.JuridicalForm AS juridical_form,
+            coalesce(lf.short, (SELECT min(Description) FROM code
+                                WHERE Category = 'JuridicalForm' AND Code = en.JuridicalForm AND Language = 'NL'))
+                AS juridical_form_label,
             CASE WHEN en.TypeOfEnterprise <> '1' THEN (
                 SELECT min(Denomination) FROM denomination d
                 WHERE d.EntityNumber = en.EnterpriseNumber AND d.TypeOfDenomination = '001'
             ) END AS name,
             (SELECT min(Zipcode) FROM address ad
              WHERE ad.EntityNumber = en.EnterpriseNumber AND ad.TypeOfAddress = 'REGO') AS postcode,
+            (SELECT min(MunicipalityNL) FROM address ad
+             WHERE ad.EntityNumber = en.EnterpriseNumber AND ad.TypeOfAddress = 'REGO') AS municipality,
             coalesce(c.has_email, false) AS has_email,
             coalesce(c.has_phone, false) AS has_phone,
             coalesce(c.has_website, false) AS has_website,
+            CASE WHEN en.TypeOfEnterprise <> '1' THEN c.email END AS email,
+            CASE WHEN en.TypeOfEnterprise <> '1' THEN c.phone END AS phone,
+            CASE WHEN en.TypeOfEnterprise <> '1' THEN c.website END AS website,
             en.TypeOfEnterprise <> '1' AS dm_allowed_from_kbo
         FROM picked p
         JOIN enterprise en ON en.EnterpriseNumber = p.ent
         LEFT JOIN contacts c ON c.ent = p.ent
+        LEFT JOIN legal_form lf ON lf.code = en.JuridicalForm
         WHERE en.Status = 'AC' AND strptime(en.StartDate, '%d-%m-%Y')::DATE >= ?::DATE
     """, [since])
     return con.execute("SELECT count(*) FROM leads").fetchone()[0]

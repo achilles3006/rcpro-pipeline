@@ -3,7 +3,7 @@
 import duckdb
 import pytest
 
-from rcpro import classify, kbo, leads
+from rcpro import classify, kbo, leads, staatsblad, websites
 
 FULL = {
     "meta.csv": "Variable,Value\nExtractNumber,516\n",
@@ -28,8 +28,12 @@ FULL = {
         "0800.000.001,2,001,Studio A\n"
         "0800.000.002,2,001,Jan Peeters\n"
     ),
-    "address.csv": "EntityNumber,TypeOfAddress,Zipcode\n0800.000.001,REGO,9000\n",
-    "contact.csv": "EntityNumber,EntityContact,ContactType,Value\n2.000.000.002,ESTB,EMAIL,jan@example.be\n",
+    "address.csv": "EntityNumber,TypeOfAddress,Zipcode,MunicipalityNL\n0800.000.001,REGO,9000,Gent\n",
+    "contact.csv": (
+        "EntityNumber,EntityContact,ContactType,Value\n"
+        "2.000.000.002,ESTB,EMAIL,jan@example.be\n"
+        "0800.000.001,ENT,TEL,09 123 45 67\n"
+    ),
     "code.csv": "Category,Code,Language,Description\nNace2025,71111,NL,Architecten\n",
 }
 
@@ -95,6 +99,10 @@ def test_leads(con):
     ).fetchall()}
     assert rows["0800.000.001"] == ("architects", "company", "Studio A", "9000", False, True)
     assert rows["0800.000.002"] == ("architects", "sole_trader", None, None, True, False)  # no name for sole traders
+    contact = {r[0]: r[1:] for r in con.execute("SELECT enterprise_number, phone, email, has_email FROM leads").fetchall()}
+    assert contact["0800.000.001"] == ("09 123 45 67", None, False)
+    assert con.execute("SELECT juridical_form_label FROM leads WHERE enterprise_number = '0800.000.001'").fetchone()[0] == "BV"
+    assert contact["0800.000.002"] == (None, None, True)  # sole trader: flag only, never the value
     classify.classify(con)
     assert con.execute("SELECT DISTINCT mandatory, evidence, needs_review FROM leads ORDER BY ALL").fetchall() == [
         ("yes", ["71111 MAIN"], False), ("yes", ["7111102 MAIN"], False)
@@ -143,3 +151,95 @@ def test_llm_round_trip(con, tmp_path):
     assert rows["0800.000.004"] == ("likely", ["llm: name: Stabiliteit"], classify.ACT_2019)
     assert rows["0800.000.005"] == ("unknown", [], None)
     assert classify.export_unknown(con, out) == 0  # already seen by the LLM
+
+
+def test_view_html(con, tmp_path):
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+    websites.apply(con)
+    staatsblad.apply(con)
+    from rcpro import view
+    assert view.write_html(con, tmp_path / "leads.html") == 3
+    html = (tmp_path / "leads.html").read_text()
+    assert "Studio A" in html and "Jan Peeters" not in html and "jan@example.be" not in html
+
+
+def test_websites_apply_is_repeatable_and_skips_none(con):
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+    websites.apply(con)  # creates website_matches
+    con.execute("""INSERT INTO website_matches VALUES
+        ('0800.000.001', 'probable', 'studio-a.be', 'name_guess', 'info@studio-a.be', '+3291234567', now()),
+        ('0800.000.006', 'none', NULL, NULL, NULL, NULL, now())""")
+    websites.apply(con)
+    websites.apply(con)  # twice: no duplicate columns
+    rows = dict(con.execute("SELECT enterprise_number, site FROM leads").fetchall())
+    assert rows == {"0800.000.001": "studio-a.be", "0800.000.002": None, "0800.000.006": None}
+
+
+DEED = """Objet de l'acte : CONSTITUTION
+1. CONSTITUANT Monsieur HERNANDEZ VAZQUEZ Nicolas, domicilié à 6010 Charleroi.
+Article 4 – Objet: études de stabilité et techniques spéciales pour bâtiments."""
+
+
+def test_deeds_round_trip(con, tmp_path):
+    con.execute("""INSERT INTO enterprise (EnterpriseNumber, Status, TypeOfEnterprise, StartDate) VALUES
+        ('0800.000.004', 'AC', '2', '07-01-2026'), ('0800.000.005', 'AC', '1', '07-01-2026')""")
+    con.execute("""INSERT INTO activity (EntityNumber, NaceVersion, NaceCode, Classification) VALUES
+        ('0800.000.004', '2025', '71121', 'MAIN'), ('0800.000.005', '2025', '71121', 'MAIN')""")
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+    staatsblad.tables(con)
+    con.execute("INSERT INTO deeds VALUES ('0800.000.004', 'https://x/a.pdf', '2026-01-20', ?, now()), "
+                "('0800.000.001', NULL, NULL, NULL, now()), ('0800.000.005', 'https://x/b.pdf', NULL, 'sole trader deed', now())",
+                [DEED])
+
+    out = tmp_path / "deeds.jsonl"
+    assert staatsblad.export_deeds(con, out) == 1  # no text, and never a sole trader
+    assert "stabilité" in out.read_text() and "sole trader deed" not in out.read_text()
+
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text('{"enterprise_number": "0800.000.004", "construction_related": "maybe"}\n')
+    with pytest.raises(ValueError, match="Nothing imported"):
+        staatsblad.import_deeds(con, bad)
+    bad.write_text('{"enterprise_number": "0800.000.001", "construction_related": "no", "evidence": "x"}\n')
+    with pytest.raises(ValueError, match="no deed text"):
+        staatsblad.import_deeds(con, bad)
+
+    answers = tmp_path / "answers.jsonl"
+    answers.write_text('{"enterprise_number": "0800.000.004", "founders": [{"name": "Nicolas Hernandez Vazquez", '
+                       '"role": "founder"}], "activity_summary": "Stability studies for buildings", '
+                       '"construction_related": "yes", "evidence": "études de stabilité ... pour bâtiments"}\n')
+    assert staatsblad.import_deeds(con, answers) == 1
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+    websites.apply(con)
+    staatsblad.apply(con)
+    staatsblad.apply(con)  # twice: no duplicate columns
+    rows = {r[0]: r[1:] for r in con.execute(
+        "SELECT enterprise_number, mandatory, evidence, founders, activity_summary FROM leads WHERE segment = 'engineers'").fetchall()}
+    assert rows["0800.000.004"] == ("likely", ["deed: études de stabilité ... pour bâtiments"],
+                                    "Nicolas Hernandez Vazquez (founder)", "Stability studies for buildings")
+    assert rows["0800.000.005"] == ("unknown", [], None, None)
+    assert staatsblad.export_deeds(con, out) == 0  # already read
+
+
+def test_deed_without_evidence_is_unknown(con, tmp_path):
+    leads.build_leads(con, "2025-10-01")
+    staatsblad.tables(con)
+    con.execute("INSERT INTO deeds VALUES ('0800.000.001', 'https://x/a.pdf', NULL, 'text', now())")
+    answers = tmp_path / "a.jsonl"
+    answers.write_text('{"enterprise_number": "0800.000.001", "founders": [], "construction_related": "yes"}\n')
+    staatsblad.import_deeds(con, answers)
+    assert con.execute("SELECT construction_related FROM deed_extraction").fetchone()[0] == "unknown"
+
+
+def test_no_deed_is_retried_only_while_recent(con, monkeypatch):
+    leads.build_leads(con, "2025-10-01")
+    staatsblad.tables(con)
+    con.execute("""INSERT INTO deeds VALUES ('0800.000.001', NULL, NULL, NULL, '2026-01-10'),
+        ('0800.000.006', NULL, NULL, NULL, '2026-06-01')""")  # started 5 and 8 January 2026
+    asked = []
+    monkeypatch.setattr(staatsblad, "fetch_one", lambda ent: asked.append(ent) or (None, None, None))
+    staatsblad.fetch(con)
+    assert asked == ["0800.000.001"]  # sole trader 0800.000.002 never, 0800.000.006 gave up after 60 days

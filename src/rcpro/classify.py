@@ -7,12 +7,15 @@ needs_review, and corrects sales_angle for engineers outside construction.
 LLM step, run by hand in Claude Code (no API key): export_unknown writes the
 unknown engineers to JSONL, Claude classifies them with prompts/classify_engineers.md,
 import_llm stores the answers in `llm_classification`, and the next classify run
-uses them for leads the rules left unknown. No evidence means "unknown".
+uses them for leads the rules left unknown. Before that, the founding deed's
+construction_related answer (rcpro.staatsblad) is used: the purpose clause is stronger
+evidence than a name. No evidence means "unknown".
 Sole traders' names are never exported.
 """
 
 import json
 
+from rcpro import staatsblad
 from rcpro.leads import SEGMENTS
 
 ACT_2019 = "Act of 9 May 2019"
@@ -57,6 +60,7 @@ def classify_one(segment, codes):
 def classify(con):
     """Add the classification columns to `leads` (run right after build_leads)."""
     _llm_table(con)
+    staatsblad.tables(con)
     codes = {}
     for ent, code, cls in con.execute("""
         SELECT DISTINCT e.ent, a.NaceCode, a.Classification
@@ -69,10 +73,16 @@ def classify(con):
 
     llm = {ent: (m, ev) for ent, m, ev in con.execute(
         "SELECT enterprise_number, mandatory, evidence FROM llm_classification").fetchall()}
+    deed = {ent: ("likely" if related == "yes" else "unlikely", [e]) for ent, related, e in con.execute("""
+        SELECT enterprise_number, construction_related, evidence FROM deed_extraction
+        WHERE construction_related IN ('yes', 'no') AND evidence IS NOT NULL""").fetchall()}
     rows = []
     for ent, segment in con.execute("SELECT enterprise_number, segment FROM leads").fetchall():
         mandatory, evidence, legal_basis = classify_one(segment, codes.get(ent, []))
-        if mandatory == "unknown" and ent in llm:
+        if segment == "engineers" and mandatory == "unknown" and ent in deed:
+            mandatory, evidence = deed[ent][0], [f"deed: {e}" for e in deed[ent][1]]
+            legal_basis = ACT_2019 if mandatory == "likely" else None
+        elif mandatory == "unknown" and ent in llm:
             mandatory, evidence = llm[ent][0], [f"llm: {e}" for e in llm[ent][1]]
             legal_basis = ACT_2019 if mandatory == "likely" else None
         rows.append((ent, mandatory, evidence, legal_basis))

@@ -18,7 +18,8 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 | 1 | `rcpro.kbo`, `rcpro.leads` | Load KBO full extract and daily updates into DuckDB, build leads per segment with a legal flag | Built, tested on synthetic data; real extract not run yet |
 | 1 | `rcpro.register` | Detect new registrations in the Order of Architects register | Not started, needs legal sign-off |
 | 2 | `rcpro.classify` | Rules plus LLM step: is the activity mandatory (yes, likely, unlikely, unknown) | Rules built (run by `leads`); LLM step weekly by hand in Claude Code |
-| 2 | `rcpro.websites` | Website discovery, accepted only with enterprise number match | Built elsewhere, untested |
+| 2 | `rcpro.websites` | Website discovery for companies: verified (own enterprise number on the site) or probable (name plus municipality) | Built; measured on 100 companies (`docs/contact-sources-measurement.md`), precision not yet checked by a labeller |
+| 2 | `rcpro.staatsblad` | Founding deed from the Staatsblad annexes: founders, activity summary, construction yes/no as evidence for unknown engineers | Built; fetch daily, LLM step weekly by hand in Claude Code |
 | 3 | n/a | Compliance gate | Not started |
 | 4 | n/a | Playbook, templates, needs analysis | Written in Notion |
 | 5 | n/a | Validation against underwriter, control group, KPIs | Not started |
@@ -27,7 +28,7 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 
 1. No personal data in git. The DuckDB file and extracts live in private storage. `data/` is ignored.
 2. Sole traders get no name in any table until the legal question on KBO reuse is answered.
-3. Website and register matches carry a confidence level (verified, probable, weak) instead of a pass/fail. Missing a real prospect costs more than a wrong match, so probable matches are used; weak matches go to manual review.
+3. Website and register matches carry a confidence level (verified, probable) instead of a pass/fail. Missing a real prospect costs more than a wrong match, so probable matches are used. Weak (name only) matches were dropped after the measurement: almost all were someone else's domain.
 4. The law is cited as a sales argument only for `sales_angle = legal_obligation`. Other segments get a different story.
 5. LLM steps must answer "unknown" without evidence and list the evidence used.
 
@@ -35,7 +36,7 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 
 ```
 docs/           research summary, open questions, decisions
-src/rcpro/      package (kbo, leads, classify rules built; websites, register still stubs)
+src/rcpro/      package (kbo, leads, classify, websites built; register still a stub)
 tests/          pytest on a synthetic mini extract
 scripts/        helper scripts (issue creation)
 .github/        workflows
@@ -60,8 +61,13 @@ python -m rcpro full data/<full>.zip
 python -m rcpro update data/<update>.zip ...   # any order; applied by extract number, never twice
 python -m rcpro codes                           # check every segment code against code.csv
 python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
+python -m rcpro websites --limit 200            # search company websites (newest first, each company once)
+python -m rcpro staatsblad --limit 200          # founding deeds (companies only, newest first, each once, 1 request / 5 s)
+python -m rcpro view                            # opens data/leads.html: filters per segment, search, links
 pytest
 ```
+
+The `leads` table (and `data/leads.csv`) is the pipeline's output: one row per new business with segment, `sales_angle`, `mandatory` plus evidence, postcode, contact flags and `dm_allowed_from_kbo`. Companies also carry name, municipality, e-mail, phone and website from KBO, and after `websites` the site found (`site`, `site_level`) with the e-mail and phone published on it (`site_email`, `site_phone`), kept apart from the KBO values because the legal basis may differ. After the deed step, companies also carry `founders` and `activity_summary` from their founding deed. Sole traders carry flags only, no name or contact values, until the KBO question in `docs/open-questions.md` is answered.
 
 Segment codes and their priority live in `SEGMENTS` in `src/rcpro/leads.py`.
 
@@ -75,3 +81,14 @@ python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
 ```
 
 The export holds codes and company names only, never sole traders' names. Answers are kept in `llm_classification`, so each week only new unknown engineers are exported. An answer without evidence is stored as unknown, and one bad line stops the whole import.
+
+### Weekly: LLM step for founding deeds (Claude Code, no API key)
+
+```
+python -m rcpro export-deeds data/deeds.jsonl
+cat data/deeds.jsonl | claude -p --model haiku "$(cat prompts/extract_deeds.md)" > data/deeds_llm.jsonl
+python -m rcpro import-deeds data/deeds_llm.jsonl
+python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
+```
+
+`staatsblad` keeps the deed text in `deeds` (a row also when there is no founding deed; that company is retried only until 60 days after its start date, because deeds are published days to weeks after the start). Claude extracts the founders (name, role), a one-line activity summary and `construction_related` (yes, no, unknown) with a quote as evidence; answers are kept in `deed_extraction`. For engineers the rules left unknown, a yes or no with evidence sets `mandatory` to likely or unlikely (evidence `deed: ...`), before the name-based LLM answer. Founder names are personal data (open question 2): stored, never used for outreach until that is answered. Sole traders are never fetched, exported or shown.
