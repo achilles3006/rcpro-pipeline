@@ -4,3 +4,99 @@ Output: one row per business with segment, legal form type, postcode, contact
 presence flags, `dm_allowed_from_kbo` and `sales_angle`
 (legal_obligation, legal_unconfirmed, commercial_need, no_outreach; see docs/segments.md). Sole traders carry no name.
 """
+
+# (segment, sales_angle, NACE-BEL 2025 main codes). Order is priority: a business
+# with main codes in two segments lands in the first one. Codes from Notion phase 0.
+SEGMENTS = [
+    ("architects", "legal_obligation", ["71111"]),
+    ("interior_architects", "legal_obligation", ["71112"]),
+    ("land_surveyors", "legal_obligation", ["71122"]),
+    ("urban_landscape", "legal_obligation", ["71113", "71119"]),
+    ("engineers", "legal_obligation", ["71121"]),  # needs classification (rcpro.classify)
+    ("accountants", "legal_obligation", ["69201", "69202"]),  # prospect or partner
+    ("psychologists", "legal_unconfirmed", ["86931", "86932"]),
+    ("management_consultants", "commercial_need", ["70200"]),
+    ("it_consultants", "commercial_need", ["62200"]),  # code to confirm, see `rcpro codes`
+    ("real_estate", "no_outreach", ["68310", "68321"]),
+    ("insurance_intermediaries", "no_outreach", ["66220"]),
+]
+
+
+def _segment_rows():
+    return [(code, seg, angle, i) for i, (seg, angle, codes) in enumerate(SEGMENTS) for code in codes]
+
+
+def _segment_table(con):
+    con.execute("CREATE OR REPLACE TEMP TABLE segment (code VARCHAR, segment VARCHAR, sales_angle VARCHAR, priority INTEGER)")
+    con.executemany("INSERT INTO segment VALUES (?, ?, ?, ?)", _segment_rows())
+
+
+def build_leads(con, since):
+    """(Re)build the `leads` table for businesses started on or after `since` (YYYY-MM-DD)."""
+    _segment_table(con)
+    con.execute("""
+        CREATE OR REPLACE VIEW entity AS  -- activities and contacts sit on the enterprise or on its establishments
+        SELECT EnterpriseNumber AS entity, EnterpriseNumber AS ent FROM enterprise
+        UNION ALL
+        SELECT EstablishmentNumber, EnterpriseNumber FROM establishment
+    """)
+    con.execute("""
+        CREATE OR REPLACE TABLE leads AS
+        WITH picked AS (
+            SELECT e.ent, arg_min(s.segment, s.priority) AS segment, arg_min(s.sales_angle, s.priority) AS sales_angle
+            FROM activity a
+            JOIN entity e ON a.EntityNumber = e.entity
+            JOIN segment s ON a.NaceCode = s.code
+            WHERE a.Classification = 'MAIN' AND a.NaceVersion = '2025'
+            GROUP BY e.ent
+        ),
+        contacts AS (
+            SELECT e.ent,
+                   bool_or(c.ContactType = 'EMAIL') AS has_email,
+                   bool_or(c.ContactType = 'TEL') AS has_phone,
+                   bool_or(c.ContactType = 'WEB') AS has_website
+            FROM contact c JOIN entity e ON c.EntityNumber = e.entity
+            GROUP BY e.ent
+        )
+        SELECT
+            p.ent AS enterprise_number,
+            strptime(en.StartDate, '%d-%m-%Y')::DATE AS start_date,
+            p.segment,
+            p.sales_angle,
+            CASE WHEN en.TypeOfEnterprise = '1' THEN 'sole_trader' ELSE 'company' END AS legal_form_type,
+            en.JuridicalForm AS juridical_form,
+            CASE WHEN en.TypeOfEnterprise <> '1' THEN (
+                SELECT min(Denomination) FROM denomination d
+                WHERE d.EntityNumber = en.EnterpriseNumber AND d.TypeOfDenomination = '001'
+            ) END AS name,
+            (SELECT min(Zipcode) FROM address ad
+             WHERE ad.EntityNumber = en.EnterpriseNumber AND ad.TypeOfAddress = 'REGO') AS postcode,
+            coalesce(c.has_email, false) AS has_email,
+            coalesce(c.has_phone, false) AS has_phone,
+            coalesce(c.has_website, false) AS has_website,
+            en.TypeOfEnterprise <> '1' AS dm_allowed_from_kbo
+        FROM picked p
+        JOIN enterprise en ON en.EnterpriseNumber = p.ent
+        LEFT JOIN contacts c ON c.ent = p.ent
+        WHERE en.Status = 'AC' AND strptime(en.StartDate, '%d-%m-%Y')::DATE >= ?::DATE
+    """, [since])
+    return con.execute("SELECT count(*) FROM leads").fetchone()[0]
+
+
+def summary(con):
+    """Leads per segment, classification and legal form type (after classify), for a quick check against the Notion figures."""
+    return con.execute("""
+        SELECT segment, sales_angle, mandatory, legal_form_type, count(*) AS n
+        FROM leads GROUP BY ALL ORDER BY ALL
+    """).fetchall()
+
+
+def codes(con):
+    """Each configured code with its KBO description; a missing description means a wrong code."""
+    _segment_table(con)
+    return con.execute("""
+        SELECT s.segment, s.code, any_value(c.Description) AS description
+        FROM segment s
+        LEFT JOIN code c ON c.Code = s.code AND c.Category ILIKE 'Nace2025' AND c.Language = 'NL'
+        GROUP BY ALL ORDER BY min(s.priority), s.code
+    """).fetchall()

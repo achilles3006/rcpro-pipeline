@@ -15,9 +15,9 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 
 | Phase | Module | Purpose | State |
 |---|---|---|---|
-| 1 | `rcpro.kbo`, `rcpro.leads` | Load KBO full extract and daily updates into DuckDB, build leads per segment with a legal flag | Built elsewhere, to be imported |
+| 1 | `rcpro.kbo`, `rcpro.leads` | Load KBO full extract and daily updates into DuckDB, build leads per segment with a legal flag | Built, tested on synthetic data; real extract not run yet |
 | 1 | `rcpro.register` | Detect new registrations in the Order of Architects register | Not started, needs legal sign-off |
-| 2 | `rcpro.classify` | Rules plus LLM step: is the activity mandatory (yes, likely, unlikely, unknown) | Built elsewhere, to be imported |
+| 2 | `rcpro.classify` | Rules plus LLM step: is the activity mandatory (yes, likely, unlikely, unknown) | Rules built (run by `leads`), LLM step not built |
 | 2 | `rcpro.websites` | Website discovery, accepted only with enterprise number match | Built elsewhere, untested |
 | 3 | n/a | Compliance gate | Not started |
 | 4 | n/a | Playbook, templates, needs analysis | Written in Notion |
@@ -35,7 +35,8 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 
 ```
 docs/           research summary, open questions, decisions
-src/rcpro/      package (stubs until code is imported)
+src/rcpro/      package (kbo, leads, classify rules built; websites, register still stubs)
+tests/          pytest on a synthetic mini extract
 scripts/        helper scripts (issue creation)
 .github/        workflows
 data/           local only, ignored
@@ -47,3 +48,17 @@ data/           local only, ignored
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+
+## Usage
+
+Download a full extract (and optional daily updates) from the KBO Open Data portal into `data/`, then:
+
+```
+python -m rcpro full data/<full>.zip
+python -m rcpro update data/<update>.zip ...   # any order; applied by extract number, never twice
+python -m rcpro codes                           # check every segment code against code.csv
+python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
+pytest
+```
+
+Segment codes and their priority live in `SEGMENTS` in `src/rcpro/leads.py`.
