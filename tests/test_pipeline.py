@@ -243,3 +243,28 @@ def test_no_deed_is_retried_only_while_recent(con, monkeypatch):
     monkeypatch.setattr(staatsblad, "fetch_one", lambda ent: asked.append(ent) or (None, None, None))
     staatsblad.fetch(con)
     assert asked == ["0800.000.001"]  # sole trader 0800.000.002 never, 0800.000.006 gave up after 60 days
+    staatsblad.fetch(con)
+    assert asked == ["0800.000.001"]  # just checked: not again within a week
+
+
+def test_web_search_round_trip(con, tmp_path, monkeypatch):
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+    websites.apply(con)
+    out = tmp_path / "search.jsonl"
+    assert websites.export_search(con, out) == 2  # both companies (KBO phone only counts as missing), never the sole trader
+    assert "0800.000.006" in out.read_text() and "0800.000.002" not in out.read_text()
+
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text('{"enterprise_number": "0800.000.002", "website": "jan.be"}\n')
+    with pytest.raises(ValueError, match="not a company lead"):
+        websites.import_search(con, bad)
+
+    monkeypatch.setattr(websites, "check_answer", lambda c, w, e, s: ("probable", "found.be", {"info@found.be"}, set()))
+    answers = tmp_path / "answers.jsonl"
+    answers.write_text('Here you go:\n{"enterprise_number": "0800.000.006", "website": "found.be", "email": null, "source": null}\n')
+    assert websites.import_search(con, answers) == {"probable": 1}
+    websites.apply(con)
+    assert con.execute("SELECT site, site_email FROM leads WHERE enterprise_number = '0800.000.006'").fetchone() == (
+        "found.be", "info@found.be")
+    assert websites.export_search(con, out) == 1  # 0800.000.006 searched once, 0800.000.001 still to do

@@ -48,3 +48,16 @@ def test_other_enterprise_number_means_someone_else():
 
 def test_parked_page_is_none():
     assert websites.match({"https://x/": "This domain is for sale"}, ENT, ["TekniSafe"], "Charleroi")[0] == "none"
+
+
+def test_check_answer_trusts_only_what_the_pages_show(monkeypatch):
+    company = {"enterprise_number": ENT, "names": ["TekniSafe"], "municipality": "Charleroi"}
+    site = {"https://teknisafe.be/": "TekniSafe BE 1041.658.155 info@teknisafe.be other@gmail.com tel 071 15 75 15" + " x" * 50}
+    monkeypatch.setattr(websites, "crawl", lambda d: site if d == "teknisafe.be" else None)
+    monkeypatch.setattr(websites, "_get", lambda url, html_only=True: (url, "nothing" + " x" * 50))
+    assert websites.check_answer(company, "https://www.teknisafe.be/contact", "made-up@teknisafe.be", None) == (
+        "verified", "teknisafe.be", {"info@teknisafe.be"}, {"+3271157515"})  # Claude's e-mail is not on the site
+    assert websites.check_answer(company, "wrong-company.be", "a@b.be", "https://dir/x")[0] == "none"
+    # e-mail only, on a cited page that shows the enterprise number
+    monkeypatch.setattr(websites, "_get", lambda url, html_only=True: (url, "TekniSafe 1041658155 ts@gmail.com" + " x" * 50))
+    assert websites.check_answer(company, None, "ts@gmail.com", "https://dir/x") == ("verified", None, {"ts@gmail.com"}, set())

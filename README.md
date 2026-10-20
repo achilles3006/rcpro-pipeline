@@ -54,7 +54,15 @@ Keep the venv outside iCloud-synced folders (Desktop, Documents): iCloud marks f
 
 ## Usage
 
-Download a full extract (and optional daily updates) from the KBO Open Data portal into `data/`, then:
+Download a full extract (and optional daily updates) from the KBO Open Data portal into `data/` (the portal needs a login, so this stays a manual step), then run everything in one go:
+
+```
+python -m rcpro run data/<full>.zip data/<update>.zip ...   # or no zip: use the database as it is
+```
+
+`run` loads the extracts, builds the leads (started in the last year, or `--since`), searches websites, fetches founding deeds from the Staatsblad, runs the three Claude steps below with `claude -p`, writes `data/leads.csv` and opens `data/leads.html`. Each network step does at most `--limit` companies (default 100, newest first; the Staatsblad takes about 10 seconds per company), and every company is done once, so running `run` daily works through the backlog. `--no-claude` skips the Claude steps. If `claude -p` is not logged in, those steps are skipped with a message: run `claude` once and `/login`.
+
+The steps one by one:
 
 ```
 python -m rcpro full data/<full>.zip
@@ -91,4 +99,15 @@ python -m rcpro import-deeds data/deeds_llm.jsonl
 python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
 ```
 
-`staatsblad` keeps the deed text in `deeds` (a row also when there is no founding deed; that company is retried only until 60 days after its start date, because deeds are published days to weeks after the start). Claude extracts the founders (name, role), a one-line activity summary and `construction_related` (yes, no, unknown) with a quote as evidence; answers are kept in `deed_extraction`. For engineers the rules left unknown, a yes or no with evidence sets `mandatory` to likely or unlikely (evidence `deed: ...`), before the name-based LLM answer. Founder names are personal data (open question 2): stored, never used for outreach until that is answered. Sole traders are never fetched, exported or shown.
+`staatsblad` keeps the deed text in `deeds` (a row also when there is no founding deed; that company is retried once a week until 60 days after its start date, because deeds are published days to weeks after the start). Claude extracts the founders (name, role), a one-line activity summary and `construction_related` (yes, no, unknown) with a quote as evidence; answers are kept in `deed_extraction`. For engineers the rules left unknown, a yes or no with evidence sets `mandatory` to likely or unlikely (evidence `deed: ...`), before the name-based LLM answer. Founder names are personal data (open question 2): stored, never used for outreach until that is answered. Sole traders are never fetched, exported or shown.
+
+### Web search for companies without e-mail or website (Claude Code, no API key)
+
+```
+python -m rcpro export-search data/search.jsonl
+cat data/search.jsonl | claude -p --model haiku --allowedTools "WebSearch WebFetch" "$(cat prompts/find_contacts.md)" > data/search_llm.jsonl
+python -m rcpro import-search data/search_llm.jsonl
+python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
+```
+
+Only companies with no e-mail and no website (KBO or found by `websites`) are exported, never sole traders. Claude searches the web and returns the website, e-mail and the page it saw them on. Claude's answer is never used as it is: `import-search` opens the site and the cited page itself and applies the same check as `websites` (own enterprise number: verified; name plus municipality: probable). An e-mail is kept only if it appears on those pages. Answers that pass go into `website_matches` with source `web_search` and show up as `site`, `site_email` and `site_phone`; every answer is kept in `web_search`. A company where nothing was found is searched again after 30 days, because new companies often get a website later.

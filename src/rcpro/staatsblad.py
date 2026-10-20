@@ -3,7 +3,7 @@
 fetch: for companies in `leads` (never sole traders, never no_outreach) not fetched before,
 newest first, read the publication list on ejustice, take the PDF under RUBRIEK
 OPRICHTING / RUBRIQUE CONSTITUTION and keep its text (pdftotext) in `deeds`. A company
-without a founding deed gets a row too; it is retried only until 60 days after its start date.
+without a founding deed gets a row too; it is retried weekly until 60 days after its start date.
 Rate limit: 1 request per 5 seconds; HTTP 429 came after about 50 requests at 1/s.
 
 LLM step, run by hand in Claude Code (no API key), like classify: export_deeds writes deed
@@ -83,10 +83,11 @@ def fetch(con, limit=None):
     rows = con.execute(f"""
         SELECT enterprise_number FROM leads
         WHERE legal_form_type = 'company' AND sales_angle <> 'no_outreach'
-          -- a deed is published days to weeks after the start: retry "no deed" for 60 days
-          -- (ponytail: fixed window, measure the real publication lag when there is more data)
+          -- a deed is published days to weeks after the start: retry "no deed" weekly for 60 days
+          -- (ponytail: fixed windows, measure the real publication lag when there is more data)
           AND enterprise_number NOT IN (SELECT d.enterprise_number FROM deeds d JOIN leads l USING (enterprise_number)
-                                        WHERE d.pdf_url IS NOT NULL OR d.fetched_at > l.start_date + INTERVAL 60 DAY)
+                                        WHERE d.pdf_url IS NOT NULL OR d.fetched_at > l.start_date + INTERVAL 60 DAY
+                                           OR d.fetched_at > now() - INTERVAL 7 DAY)
         ORDER BY start_date DESC, enterprise_number
         {"LIMIT " + str(int(limit)) if limit else ""}
     """).fetchall()
