@@ -3,8 +3,9 @@
 Output: one row per business with segment, legal form type, postcode, contact
 presence flags, `dm_allowed_from_kbo` and `sales_angle`
 (legal_obligation, legal_unconfirmed, commercial_need, no_outreach; see docs/segments.md).
-Companies also get name, municipality, e-mail, phone and website from KBO.
-Sole traders get flags only: no name and no contact values (KBO direct marketing ban).
+Every business gets name, municipality, e-mail, phone and website from KBO; for a
+sole trader the name is the owner's ("Surname, First name"). The list is informational:
+sole traders keep dm_allowed_from_kbo = false (KBO direct marketing ban).
 """
 
 # (segment, sales_angle, NACE-BEL 2025 main codes). Order is priority: a business
@@ -79,20 +80,23 @@ def build_leads(con, since):
             coalesce(lf.short, (SELECT min(Description) FROM code
                                 WHERE Category = 'JuridicalForm' AND Code = en.JuridicalForm AND Language = 'NL'))
                 AS juridical_form_label,
-            CASE WHEN en.TypeOfEnterprise <> '1' THEN (
-                SELECT min(Denomination) FROM denomination d
-                WHERE d.EntityNumber = en.EnterpriseNumber AND d.TypeOfDenomination = '001'
-            ) END AS name,
-            (SELECT min(Zipcode) FROM address ad
-             WHERE ad.EntityNumber = en.EnterpriseNumber AND ad.TypeOfAddress = 'REGO') AS postcode,
-            (SELECT min(MunicipalityNL) FROM address ad
-             WHERE ad.EntityNumber = en.EnterpriseNumber AND ad.TypeOfAddress = 'REGO') AS municipality,
+            (SELECT min(Denomination) FROM denomination d
+             WHERE d.EntityNumber = en.EnterpriseNumber AND d.TypeOfDenomination = '001') AS name,
+            -- registered office; sole traders have none in KBO, so fall back to their establishment
+            coalesce((SELECT min(Zipcode) FROM address ad
+                      WHERE ad.EntityNumber = en.EnterpriseNumber AND ad.TypeOfAddress = 'REGO'),
+                     (SELECT min(Zipcode) FROM address ad JOIN establishment es ON ad.EntityNumber = es.EstablishmentNumber
+                      WHERE es.EnterpriseNumber = en.EnterpriseNumber)) AS postcode,
+            coalesce((SELECT min(MunicipalityNL) FROM address ad
+                      WHERE ad.EntityNumber = en.EnterpriseNumber AND ad.TypeOfAddress = 'REGO'),
+                     (SELECT min(MunicipalityNL) FROM address ad JOIN establishment es ON ad.EntityNumber = es.EstablishmentNumber
+                      WHERE es.EnterpriseNumber = en.EnterpriseNumber)) AS municipality,
             coalesce(c.has_email, false) AS has_email,
             coalesce(c.has_phone, false) AS has_phone,
             coalesce(c.has_website, false) AS has_website,
-            CASE WHEN en.TypeOfEnterprise <> '1' THEN c.email END AS email,
-            CASE WHEN en.TypeOfEnterprise <> '1' THEN c.phone END AS phone,
-            CASE WHEN en.TypeOfEnterprise <> '1' THEN c.website END AS website,
+            c.email,
+            c.phone,
+            c.website,
             en.TypeOfEnterprise <> '1' AS dm_allowed_from_kbo
         FROM picked p
         JOIN enterprise en ON en.EnterpriseNumber = p.ent

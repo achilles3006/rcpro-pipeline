@@ -27,7 +27,7 @@ Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not 
 ## Rules for this repo
 
 1. No personal data in git. The DuckDB file and extracts live in private storage. `data/` is ignored.
-2. Sole traders get no name in any table until the legal question on KBO reuse is answered.
+2. Sole traders appear in `leads` with name and KBO contact data (informational list), but keep `dm_allowed_from_kbo` false and are never searched, exported to an LLM or contacted until the legal question on KBO reuse is answered.
 3. Website and register matches carry a confidence level (verified, probable) instead of a pass/fail. Missing a real prospect costs more than a wrong match, so probable matches are used. Weak (name only) matches were dropped after the measurement: almost all were someone else's domain.
 4. The law is cited as a sales argument only for `sales_angle = legal_obligation`. Other segments get a different story.
 5. LLM steps must answer "unknown" without evidence and list the evidence used.
@@ -75,7 +75,7 @@ python -m rcpro view                            # opens data/leads.html: filters
 pytest
 ```
 
-The `leads` table (and `data/leads.csv`) is the pipeline's output: one row per new business with segment, `sales_angle`, `mandatory` plus evidence, postcode, contact flags and `dm_allowed_from_kbo`. Companies also carry name, municipality, e-mail, phone and website from KBO, and after `websites` the site found (`site`, `site_level`) with the e-mail and phone published on it (`site_email`, `site_phone`), kept apart from the KBO values because the legal basis may differ. After the deed step, companies also carry `founders` and `activity_summary` from their founding deed. Sole traders carry flags only, no name or contact values, until the KBO question in `docs/open-questions.md` is answered.
+The `leads` table (and `data/leads.csv`) is the pipeline's output: one row per new business with segment, `sales_angle`, `mandatory` plus evidence, postcode, contact flags and `dm_allowed_from_kbo`. Every business carries name, municipality, e-mail, phone and website from KBO (for a sole trader the owner's name; the list is informational, sole traders keep `dm_allowed_from_kbo` false), and after `websites` the site found (`site`, `site_level`) with the e-mail and phone published on it (`site_email`, `site_phone`), kept apart from the KBO values because the legal basis may differ. After the deed step, companies also carry `founders` and `activity_summary` from their founding deed.
 
 Segment codes and their priority live in `SEGMENTS` in `src/rcpro/leads.py`.
 

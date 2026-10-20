@@ -28,7 +28,7 @@ FULL = {
         "0800.000.001,2,001,Studio A\n"
         "0800.000.002,2,001,Jan Peeters\n"
     ),
-    "address.csv": "EntityNumber,TypeOfAddress,Zipcode,MunicipalityNL\n0800.000.001,REGO,9000,Gent\n",
+    "address.csv": "EntityNumber,TypeOfAddress,Zipcode,MunicipalityNL\n0800.000.001,REGO,9000,Gent\n2.000.000.002,BAET,2000,Antwerpen\n",
     "contact.csv": (
         "EntityNumber,EntityContact,ContactType,Value\n"
         "2.000.000.002,ESTB,EMAIL,jan@example.be\n"
@@ -98,11 +98,11 @@ def test_leads(con):
         "SELECT enterprise_number, segment, legal_form_type, name, postcode, has_email, dm_allowed_from_kbo FROM leads"
     ).fetchall()}
     assert rows["0800.000.001"] == ("architects", "company", "Studio A", "9000", False, True)
-    assert rows["0800.000.002"] == ("architects", "sole_trader", None, None, True, False)  # no name for sole traders
+    assert rows["0800.000.002"] == ("architects", "sole_trader", "Jan Peeters", "2000", True, False)  # owner name, establishment postcode
     contact = {r[0]: r[1:] for r in con.execute("SELECT enterprise_number, phone, email, has_email FROM leads").fetchall()}
     assert contact["0800.000.001"] == ("09 123 45 67", None, False)
     assert con.execute("SELECT juridical_form_label FROM leads WHERE enterprise_number = '0800.000.001'").fetchone()[0] == "BV"
-    assert contact["0800.000.002"] == (None, None, True)  # sole trader: flag only, never the value
+    assert contact["0800.000.002"] == (None, "jan@example.be", True)  # sole trader: value shown, dm still false
     classify.classify(con)
     assert con.execute("SELECT DISTINCT mandatory, evidence, needs_review FROM leads ORDER BY ALL").fetchall() == [
         ("yes", ["71111 MAIN"], False), ("yes", ["7111102 MAIN"], False)
@@ -161,7 +161,7 @@ def test_view_html(con, tmp_path):
     from rcpro import view
     assert view.write_html(con, tmp_path / "leads.html") == 3
     html = (tmp_path / "leads.html").read_text()
-    assert "Studio A" in html and "Jan Peeters" not in html and "jan@example.be" not in html
+    assert "Studio A" in html and "Jan Peeters" in html and "jan@example.be" in html
 
 
 def test_websites_apply_is_repeatable_and_skips_none(con):
