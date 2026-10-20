@@ -23,8 +23,8 @@ Ordered by what blocks what. P0 blocks any outreach. P1 blocks a trustworthy pil
 
 12. **KBO SFTP access** from FPS Economy.
 13. **Network access** to vind.architect.be, to test linking KBO companies to the register.
-14. **Website discovery.** Needs a Brave Search API key and a test on 100 companies. Question whether it is worth running at all, given 2 to 7% yield and the decision to qualify in conversation.
-15. **LLM classification.** Run the Haiku step on 100 unknown engineers; needs an Anthropic API key.
+14. **Website discovery.** Built and measured on 100 companies (about 4% yield, `docs/contact-sources-measurement.md`, `docs/domain-guess-v2.md`). Open: precision check by a labeller.
+15. **LLM classification.** Runs via `claude -p` (no API key). Open: check its answers on 100 unknown engineers.
 16. **Validation (phase 5).** Blind-labelled sample of 200 against an underwriter, over-represent engineers, precision target 85% or more, control group, KPIs from contact rate to cost per policy.
 17. **Commercial segments.** Measure volume, company versus sole trader share and contact data for management and IT consultants, and test the claim that clients require proof of cover. Wording of the sales story for non-mandatory segments needs lawyer approval (no implied obligation).
 18. **Missing Notion pages.** Phase 3 (compliance) and Phase 5 (validation) have no page yet, although Phase 4 is already written.

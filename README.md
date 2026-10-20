@@ -1,113 +1,181 @@
 # rcpro-pipeline
 
-Pipeline to find newly started Belgian businesses that must carry professional liability insurance (beroepsaansprakelijkheid, RC pro), and to prepare a compliant first contact. Owner: Omata (Groep Induver).
+Finds newly started Belgian businesses that may need professional liability insurance (beroepsaansprakelijkheid, RC pro) and enriches them with contact data, so sales can prepare a first contact. Owner: Omata (Groep Induver).
 
-Status: research phase 0 to 2 done, phase 3 (compliance) and 5 (validation) not started. Nothing in this repo may be used for outreach until the legal blockers in `docs/open-questions.md` are closed.
+Input: the public KBO Open Data extract. Output: `data/leads.csv` and a filterable page `data/leads.html`, one row per new business.
 
-## Scope
+> **Before you contact anyone.** The pipeline is a lead list, not a green light for outreach. The legal questions in `docs/open-questions.md` (P0) are still open: KBO direct marketing ban, e-mail consent, FSMA registration. Until they are closed:
+> - never contact a row with `dm_allowed_from_kbo = false` (all sole traders);
+> - cite the law as a sales argument only for `sales_angle = legal_obligation`;
+> - `founders` are personal data: never use them for outreach.
 
-1. Target: every newly started business that could plausibly buy professional liability insurance, grouped by `sales_angle` (see `docs/segments.md`).
-2. Pilot: construction professionals under the Act of 9 May 2019, architects first. This is the only group where the legal obligation is used as the sales story.
-3. Out of scope: ten-year liability (Act of 31 May 2017) and general third-party liability.
-4. Pilot size: architects and interior architects, about 170 starters a month, of which about 55 companies a month are usable from KBO data.
+## 1. What you need
 
-## Pipeline
+| What | Why | How |
+|---|---|---|
+| Python 3.11 or newer | runs the pipeline | `python3 --version` |
+| Claude Code CLI, logged in | the three LLM steps (no API key needed) | install from claude.com/claude-code, run `claude` once and type `/login` |
+| KBO Open Data account | download the extracts | free registration on the KBO Open Data portal of FPS Economy (kbopub.economie.fgov.be) |
+| About 2 GB free disk | the database is about 600 MB | |
+| Internet access | websites, Staatsblad (ejustice.just.fgov.be), web search | |
 
-| Phase | Module | Purpose | State |
-|---|---|---|---|
-| 1 | `rcpro.kbo`, `rcpro.leads` | Load KBO full extract and daily updates into DuckDB, build leads per segment with a legal flag | Built, tested on synthetic data; real extract not run yet |
-| 1 | `rcpro.register` | Detect new registrations in the Order of Architects register | Not started, needs legal sign-off |
-| 2 | `rcpro.classify` | Rules plus LLM step: is the activity mandatory (yes, likely, unlikely, unknown) | Rules built (run by `leads`); LLM step weekly by hand in Claude Code |
-| 2 | `rcpro.websites` | Website discovery for companies: verified (own enterprise number on the site) or probable (name plus municipality) | Built; measured on 100 companies (`docs/contact-sources-measurement.md`), precision not yet checked by a labeller |
-| 2 | `rcpro.staatsblad` | Founding deed from the Staatsblad annexes: founders, activity summary, construction yes/no as evidence for unknown engineers | Built; fetch daily, LLM step weekly by hand in Claude Code |
-| 3 | n/a | Compliance gate | Not started |
-| 4 | n/a | Playbook, templates, needs analysis | Written in Notion |
-| 5 | n/a | Validation against underwriter, control group, KPIs | Not started |
+Claude is optional: with `--no-claude` everything else still runs.
 
-## Rules for this repo
-
-1. No personal data in git. The DuckDB file and extracts live in private storage. `data/` is ignored.
-2. Sole traders appear in `leads` with name and KBO contact data (informational list), but keep `dm_allowed_from_kbo` false and are never searched, exported to an LLM or contacted until the legal question on KBO reuse is answered.
-3. Website and register matches carry a confidence level (verified, probable) instead of a pass/fail. Missing a real prospect costs more than a wrong match, so probable matches are used. Weak (name only) matches were dropped after the measurement: almost all were someone else's domain.
-4. The law is cited as a sales argument only for `sales_angle = legal_obligation`. Other segments get a different story.
-5. LLM steps must answer "unknown" without evidence and list the evidence used.
-
-## Layout
+## 2. Install (once)
 
 ```
-docs/           research summary, open questions, decisions
-src/rcpro/      package (kbo, leads, classify, websites built; register still a stub)
-tests/          pytest on a synthetic mini extract
-scripts/        helper scripts (issue creation)
-.github/        workflows
-data/           local only, ignored
-```
-
-## Setup
-
-```
-python3 -m venv ~/.venvs/rcpro-pipeline && source ~/.venvs/rcpro-pipeline/bin/activate
+git clone <repo-url> rcpro-pipeline
+cd rcpro-pipeline
+python3 -m venv ~/.venvs/rcpro-pipeline
+source ~/.venvs/rcpro-pipeline/bin/activate
 pip install -e ".[dev]"
+pytest            # should end with "27 passed"
 ```
 
-Keep the venv outside iCloud-synced folders (Desktop, Documents): iCloud marks files in dot-folders hidden, and Python 3.13 then skips the editable install.
+Keep the venv outside iCloud-synced folders (Desktop, Documents): iCloud marks files in dot-folders as hidden, and Python 3.13 then skips the editable install. Activate the venv (`source ...`) in every new terminal.
 
-## Usage
+## 3. First run
 
-Download a full extract (and optional daily updates) from the KBO Open Data portal into `data/` (the portal needs a login, so this stays a manual step), then run everything in one go:
+1. Log in to the KBO Open Data portal and download the latest **full** extract (`KboOpenData_<nr>_<date>_Full.zip`) and any **update** files published after it (`..._Update.zip`). Put them in `data/`. The portal needs a login, so this stays a manual step.
+2. Run:
 
 ```
-python -m rcpro run data/<full>.zip data/<update>.zip ...   # or no zip: use the database as it is
+python -m rcpro run data/KboOpenData_*_Full.zip data/KboOpenData_*_Update.zip
 ```
 
-`run` loads the extracts, builds the leads (started in the last year, or `--since`), searches websites, fetches founding deeds from the Staatsblad, runs the three Claude steps below with `claude -p`, writes `data/leads.csv` and opens `data/leads.html`. Each network step does at most `--limit` companies (default 100, newest first; the Staatsblad takes about 10 seconds per company), and every company is done once, so running `run` daily works through the backlog. `--no-claude` skips the Claude steps. If `claude -p` is not logged in, those steps are skipped with a message: run `claude` once and `/login`.
+The first run loads the full extract, builds the leads, and enriches the newest 100 companies. It ends by opening `data/leads.html` in the browser.
 
-The steps one by one:
+## 4. Daily routine
+
+Download the new update zip(s) and run:
+
+```
+python -m rcpro run data/KboOpenData_<nr>_*_Update.zip
+```
+
+- Updates can be given in any order and twice; each is applied once, by extract number. A gap (missing update) gives a warning: download the missing one and run again.
+- Without a zip (`python -m rcpro run`) the database is used as it is; useful to work through the enrichment backlog.
+- Each network step handles at most `--limit` companies (default 100, newest first) and never the same company twice, so daily runs work through the backlog. The Staatsblad step takes about 10 seconds per company (one request every 5 seconds, on purpose), so 100 companies is about 15 to 20 minutes.
+- Once a month or so, load a fresh full extract instead of updates: `python -m rcpro run data/..._Full.zip`.
+
+Options of `run`:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--since YYYY-MM-DD` | one year ago | only businesses started on or after this date |
+| `--limit N` | 100 | companies per network step |
+| `--no-claude` | off | skip the three Claude steps |
+
+The database is `data/kbo.duckdb`; set `RCPRO_DB=/path/to/file.duckdb` to put it elsewhere (for example on private shared storage).
+
+## 5. What `run` does
+
+1. **Load KBO** (`rcpro.kbo`): full extract or updates into DuckDB.
+2. **Leads** (`rcpro.leads`): businesses started since `--since` whose main NACE code is in a segment (`SEGMENTS` in `src/rcpro/leads.py`).
+3. **Classify** (`rcpro.classify`): rules decide whether insurance is mandatory (yes, likely, unlikely, unknown) with the codes as evidence.
+4. **Websites** (`rcpro.websites`): guesses domains from the name, KBO website and e-mail domain, opens the site and keeps it as `verified` (own enterprise number on the site) or `probable` (name plus municipality). Companies only.
+5. **Staatsblad** (`rcpro.staatsblad`): fetches the founding deed. Companies only; a company without a deed yet is retried weekly up to 60 days after its start.
+6. **Claude steps** (`claude -p --model haiku`, prompts in `prompts/`):
+   - deeds: founders, one-line activity summary, construction yes/no with a quote;
+   - unknown engineers: mandatory or not, from the company name and codes;
+   - web search: website and e-mail for companies that have neither. Claude's answer is never taken as is: the pipeline opens the site itself and applies the same verified/probable check. Nothing found: retried after 30 days.
+7. **Output**: `data/leads.csv` and `data/leads.html`.
+
+Each step can also run on its own; see `python -m rcpro --help` and section 9.
+
+## 6. The output
+
+`data/leads.html` has filters per segment and sales angle, a search box, and links to KBO and the websites. `data/leads.csv` has the same rows for Excel. Columns:
+
+| Column | Meaning |
+|---|---|
+| `enterprise_number`, `start_date` | KBO number and start date |
+| `segment`, `sales_angle` | group and sales story: `legal_obligation` (law requires the cover), `legal_unconfirmed` (probably, not confirmed), `commercial_need` (no obligation, other story), `no_outreach` (do not contact) |
+| `legal_form_type`, `juridical_form`, `juridical_form_label` | `company` or `sole_trader`, KBO legal form (BV, NV, ...) |
+| `name`, `postcode`, `municipality` | from KBO; for a sole trader the owner's name |
+| `has_email`, `has_phone`, `has_website`, `email`, `phone`, `website` | contact data from KBO |
+| `dm_allowed_from_kbo` | false for every sole trader: **do not contact** |
+| `mandatory`, `evidence`, `legal_basis`, `needs_review` | is the cover mandatory, on what evidence, which law, and whether a person should check |
+| `site_level`, `site`, `site_email`, `site_phone` | website found by the pipeline and the contact data on it; kept apart from KBO because the legal basis may differ |
+| `founders`, `activity_summary` | from the founding deed (companies only) |
+
+Segments and how to approach each one: `docs/segments.md`.
+
+## 7. Rules for using this repo
+
+1. **No personal data in git.** `data/`, `*.duckdb`, `*.csv` and `*.zip` are ignored. Keep the database and extracts on private storage and never commit them.
+2. **Sole traders** appear in `leads` with name and KBO contact data (informational list), but keep `dm_allowed_from_kbo = false` and are never searched, exported to an LLM or contacted until the legal question on KBO reuse is answered.
+3. Website matches carry a confidence level (`verified`, `probable`) instead of pass/fail. Missing a real prospect costs more than a wrong match, so probable matches are kept.
+4. The law is a sales argument only for `sales_angle = legal_obligation`.
+5. LLM steps must answer "unknown" without evidence and list the evidence they used; an answer without evidence is stored as unknown.
+
+## 8. Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Claude, ...: skipped (...)` | `claude` is not installed or not logged in: run `claude`, then `/login`. Or use `--no-claude`. |
+| `ModuleNotFoundError: rcpro` | venv not active, or venv inside an iCloud folder (see section 2) |
+| Warning about a gap in extract numbers | an update zip is missing: download it and run again |
+| `rcpro codes` shows `!! NOT FOUND` | a segment code no longer exists in KBO's `code.csv`: fix `SEGMENTS` in `src/rcpro/leads.py` |
+| Database locked | another `rcpro` process (or a DuckDB client) has the file open: close it |
+| Very few websites found | expected: most starters have no site yet (about 4% hit rate, see `docs/domain-guess-v2.md`) |
+
+## 9. Single steps and the manual Claude steps
 
 ```
 python -m rcpro full data/<full>.zip
-python -m rcpro update data/<update>.zip ...   # any order; applied by extract number, never twice
+python -m rcpro update data/<update>.zip ...
 python -m rcpro codes                           # check every segment code against code.csv
 python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
-python -m rcpro websites --limit 200            # search company websites (newest first, each company once)
-python -m rcpro staatsblad --limit 200          # founding deeds (companies only, newest first, each once, 1 request / 5 s)
-python -m rcpro view                            # opens data/leads.html: filters per segment, search, links
-pytest
+python -m rcpro websites --limit 200
+python -m rcpro staatsblad --limit 200
+python -m rcpro view                            # writes and opens data/leads.html
 ```
 
-The `leads` table (and `data/leads.csv`) is the pipeline's output: one row per new business with segment, `sales_angle`, `mandatory` plus evidence, postcode, contact flags and `dm_allowed_from_kbo`. Every business carries name, municipality, e-mail, phone and website from KBO (for a sole trader the owner's name; the list is informational, sole traders keep `dm_allowed_from_kbo` false), and after `websites` the site found (`site`, `site_level`) with the e-mail and phone published on it (`site_email`, `site_phone`), kept apart from the KBO values because the legal basis may differ. After the deed step, companies also carry `founders` and `activity_summary` from their founding deed.
-
-Segment codes and their priority live in `SEGMENTS` in `src/rcpro/leads.py`.
-
-### Weekly: LLM step for unknown engineers (Claude Code, no API key)
+The Claude steps by hand (what `run` does automatically); after each import, run `leads` again:
 
 ```
 python -m rcpro export-unknown data/unknown.jsonl
 cat data/unknown.jsonl | claude -p --model haiku "$(cat prompts/classify_engineers.md)" > data/llm.jsonl
 python -m rcpro import-llm data/llm.jsonl
-python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
-```
 
-The export holds codes and company names only, never sole traders' names. Answers are kept in `llm_classification`, so each week only new unknown engineers are exported. An answer without evidence is stored as unknown, and one bad line stops the whole import.
-
-### Weekly: LLM step for founding deeds (Claude Code, no API key)
-
-```
 python -m rcpro export-deeds data/deeds.jsonl
 cat data/deeds.jsonl | claude -p --model haiku "$(cat prompts/extract_deeds.md)" > data/deeds_llm.jsonl
 python -m rcpro import-deeds data/deeds_llm.jsonl
-python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
-```
 
-`staatsblad` keeps the deed text in `deeds` (a row also when there is no founding deed; that company is retried once a week until 60 days after its start date, because deeds are published days to weeks after the start). Claude extracts the founders (name, role), a one-line activity summary and `construction_related` (yes, no, unknown) with a quote as evidence; answers are kept in `deed_extraction`. For engineers the rules left unknown, a yes or no with evidence sets `mandatory` to likely or unlikely (evidence `deed: ...`), before the name-based LLM answer. Founder names are personal data (open question 2): stored, never used for outreach until that is answered. Sole traders are never fetched, exported or shown.
-
-### Web search for companies without e-mail or website (Claude Code, no API key)
-
-```
 python -m rcpro export-search data/search.jsonl
 cat data/search.jsonl | claude -p --model haiku --allowedTools "WebSearch WebFetch" "$(cat prompts/find_contacts.md)" > data/search_llm.jsonl
 python -m rcpro import-search data/search_llm.jsonl
-python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
 ```
 
-Only companies with no e-mail and no website (KBO or found by `websites`) are exported, never sole traders. Claude searches the web and returns the website, e-mail and the page it saw them on. Claude's answer is never used as it is: `import-search` opens the site and the cited page itself and applies the same check as `websites` (own enterprise number: verified; name plus municipality: probable). An e-mail is kept only if it appears on those pages. Answers that pass go into `website_matches` with source `web_search` and show up as `site`, `site_email` and `site_phone`; every answer is kept in `web_search`. A company where nothing was found is searched again after 30 days, because new companies often get a website later.
+Exports hold companies only, never sole traders' names. Answers are stored (`llm_classification`, `deed_extraction`, `web_search`), so each run only sends new companies. One malformed answer line stops the whole import, so nothing half-done is stored.
+
+## 10. Project status
+
+| Phase | Module | State |
+|---|---|---|
+| 1 | `rcpro.kbo`, `rcpro.leads` | In use, run on real KBO extracts |
+| 1 | `rcpro.register` (Order of Architects) | Not started, needs legal sign-off |
+| 2 | `rcpro.classify` | Rules plus Claude step for unknown engineers |
+| 2 | `rcpro.websites` | In use; precision not yet checked by a labeller (`docs/contact-sources-measurement.md`) |
+| 2 | `rcpro.staatsblad` | In use |
+| 3 | Compliance gate | Not started (blocks outreach) |
+| 4 | Playbook, templates | In Notion |
+| 5 | Validation with underwriter, KPIs | Not started |
+
+The daily GitHub workflow (`.github/workflows/kbo-daily.yml`) is a placeholder: the KBO download needs a login (or SFTP access, not granted yet) and the database must not live in GitHub. Run the pipeline on a machine with private storage.
+
+## 11. Layout and development
+
+```
+src/rcpro/      package: kbo, leads, classify, websites, staatsblad, llm, view, __main__ (CLI)
+prompts/        prompts for the Claude steps
+tests/          pytest on a synthetic mini extract (no network, no real data)
+scripts/        measurements and the GitHub issue script
+docs/           research, decisions, open questions, segments, measurements
+data/           local only, ignored by git
+```
+
+- Add or change a segment: edit `SEGMENTS` in `src/rcpro/leads.py`, run `python -m rcpro codes`, then `pytest`.
+- Run `pytest` and `ruff check src tests` before every commit.
+- Background: `docs/research-summary.md`, `docs/decisions.md`, `docs/open-questions.md`.
