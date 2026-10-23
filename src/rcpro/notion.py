@@ -42,8 +42,6 @@ def _call(method, path, body=None):
 
 def norm(kind, value):
     """A value as Notion stores it, so a leads value and a Notion value compare equal."""
-    if isinstance(value, list):
-        value = "[" + ", ".join(map(str, value)) + "]"  # as in leads.csv
     if isinstance(value, date):
         value = value.isoformat()
     if kind == "checkbox":
@@ -98,7 +96,9 @@ def sync(con, database=None):
         cursor = r["next_cursor"]
 
     counts = {"created": 0, "updated": 0, "unchanged": 0, "skipped columns": [c for c in columns if c not in kinds]}
-    for row in con.execute(f"SELECT {', '.join(kinds)} FROM leads ORDER BY start_date DESC").fetchall():
+    lists = {c[0] for c in con.execute("DESCRIBE leads").fetchall() if c[1].endswith("[]")}
+    select = ", ".join(f"CAST({c} AS VARCHAR)" if c in lists else c for c in kinds)  # lists as leads.csv writes them
+    for row in con.execute(f"SELECT {select} FROM leads ORDER BY start_date DESC").fetchall():
         want = {c: norm(k, v) for (c, k), v in zip(kinds.items(), row)}
         page = pages.get(want[key])
         if page:
