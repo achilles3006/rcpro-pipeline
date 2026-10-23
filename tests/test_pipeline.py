@@ -127,9 +127,9 @@ def test_llm_round_trip(con, tmp_path):
     classify.classify(con)
 
     out = tmp_path / "unknown.jsonl"
-    assert classify.export_unknown(con, out) == 2
+    assert classify.export_unknown(con, out) == 1
     text = out.read_text()
-    assert "Stabiliteit BV" in text and "Piet Janssens" not in text  # never a sole trader's name
+    assert "Stabiliteit BV" in text and "0800.000.005" not in text  # never a sole trader, not even its codes
 
     answers = tmp_path / "llm.jsonl"
     answers.write_text(

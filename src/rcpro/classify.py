@@ -105,11 +105,10 @@ def _llm_table(con):
 
 
 def export_unknown(con, path):
-    """Write engineers the rules left unknown, and the LLM has not seen yet, to JSONL."""
+    """Write companies among the engineers the rules left unknown, and the LLM has not seen yet, to JSONL."""
     _llm_table(con)
     rows = con.execute("""
-        SELECT l.enterprise_number,
-               CASE WHEN l.legal_form_type = 'company' THEN l.name END AS name,  -- never a sole trader's name
+        SELECT l.enterprise_number, l.name,
                list_sort(list(DISTINCT {'code': a.NaceCode, 'classification': a.Classification,
                                         'description': c.Description})) AS codes
         FROM leads l
@@ -117,6 +116,7 @@ def export_unknown(con, path):
         JOIN activity a ON a.EntityNumber = e.entity AND a.NaceVersion = '2025'
         LEFT JOIN code c ON c.Code = a.NaceCode AND c.Category ILIKE 'Nace2025' AND c.Language = 'NL'
         WHERE l.segment = 'engineers' AND l.mandatory = 'unknown'
+          AND l.legal_form_type = 'company'  -- sole traders never go to an LLM (KBO reuse question)
           AND l.enterprise_number NOT IN (SELECT enterprise_number FROM llm_classification)
         GROUP BY ALL ORDER BY 1
     """).fetchall()
