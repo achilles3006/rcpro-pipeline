@@ -10,7 +10,7 @@ Stand 23 oktober 2026. Dit is een werkdocument, geen juridisch advies. De punten
 | Uitzondering: rechtspersonen, op onpersoonlijke adressen (info@, contact@) | KB 4 april 2003, art. 1 | Alleen BV, NV, CommV, VOF, CV, VZW, stichting. Geen eenmanszaak (natuurlijke persoon), geen maatschap zonder rechtspersoonlijkheid. Geen jan@ of voornaam.naam@ |
 | Derden mogen persoonsgegevens uit de KBO niet voor direct marketing gebruiken | KB 18 juli 2008, art. 2 §1 lid 2 (herhaald in GBA-beslissing 72/2025) | Gegevens van eenmanszaken en persoonlijke adressen uit de KBO: nooit. Oprichters uit het Staatsblad: nooit |
 | Algemene adressen zoals info@ zijn geen persoonsgegevens, jan@bedrijf.be wel | GBA-lijn, o.a. samengevat door Cultuurloket | Met alleen onpersoonlijke adressen valt de AVG grotendeels weg. We geven toch een korte melding (bron, doel, bezwaar) |
-| Reclame moet herkenbaar zijn, de afzender identificeerbaar, met een eenvoudige manier om af te melden | art. XII.12 en XII.13 WER, KB 4 april 2003 | "Reclame:" / "Publicité :" in het onderwerp, volledige afzender in de footer, STOP-antwoord en afmeldadres |
+| Reclame moet herkenbaar zijn, de afzender identificeerbaar, met een eenvoudige manier om af te melden | art. XII.12 en XII.13 WER, KB 4 april 2003 | Het onderwerp zegt meteen dat het een verzekeringsvoorstel is (XII.12: herkenbaar "gezien de globale indruk", anders het woord "reclame"). Volledige afzender in de footer. In elke mail een afmeldmogelijkheid (XII.13 §2: ook bij handmatig verstuurde mails) |
 | Een verzekeringstussenpersoon moet ingeschreven zijn bij de FSMA; reclame moet correct, duidelijk en niet misleidend zijn | Wet 4 april 2014, art. 259 | FSMA-nummer in elke mail. De wet alleen noemen waar de verplichting vaststaat (`mandatory = yes`) |
 
 ## Wat de code doet
@@ -31,7 +31,7 @@ Op 23 oktober haalden 16 pilotbedrijven alle regels (13 architecten, 3 interieur
 Doe deze stappen in deze volgorde. Elk punt dat niet af is, blokkeert de eerste mail.
 
 1. **FSMA-nummer.** Zoek het op in het FSMA-register en beslis of je onder de inschrijving van Omata of van Induver mailt. Zonder inschrijving mag je geen verzekeringen aanbieden.
-2. **`templates/sender.toml` invullen**: juridische naam, adres, ondernemingsnummer, FSMA-nummer, mailadres, telefoon, afmeldadres en privacylink.
+2. **`templates/sender.toml` invullen**: naam, adres, nummers en privacylink staan er al (van omata.be). Vul nog de ondertekenaar, het mailadres en het telefoonnummer in. Laat compliance bevestigen dat Ōmata mailt onder de FSMA-inschrijving van Group Induver NV.
 3. **Privacyverklaring online.** Ze moet bevatten: welke gegevens je gebruikt (algemeen adres en bedrijfsnaam), de bron (KBO, website), het doel, de grond (gerechtvaardigd belang), het recht op bezwaar, hoe lang je de gegevens bewaart, en een contactpersoon.
 4. **Verwerkingsregister.** Voeg één regel toe voor "prospectie per e-mail", met een korte belangenafweging. Dit is een half uur werk.
 5. **Afmelden.** Kijk elke werkdag de mailbox na. Wie STOP antwoordt of afmeldt: `python -m rcpro optout <adres>`, en zeker nooit opnieuw mailen.

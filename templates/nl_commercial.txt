@@ -1,4 +1,4 @@
-Subject: Reclame: beroepsaansprakelijkheid voor {company}
+Subject: Voorstel beroepsaansprakelijkheidsverzekering voor {company}
 Goedendag,
 
 Proficiat met de start van {company}.
@@ -11,8 +11,7 @@ Met vriendelijke groet,
 
 {signatory}
 {company_name}, {address}
-Ondernemingsnummer {kbo_number} - FSMA {fsma_number}
+Ondernemingsnummer {kbo_number} - verzekeringsmakelaar: {fsma_number}
 {email} - {phone}
 
-Waarom deze mail? We vonden het algemene e-mailadres van {company} in {source}. We gebruiken het enkel voor dit voorstel en sturen hoogstens één herinnering.
-Geen mails meer van ons? Antwoord met STOP of mail naar {optout_email}. Privacy: {privacy_url}
+We vonden het algemene adres van {company} in {source}. Liever geen mails van ons? Antwoord gewoon met STOP. Privacy: {privacy_url}

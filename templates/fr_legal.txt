@@ -1,4 +1,4 @@
-Subject: Publicité : responsabilité professionnelle pour {company}
+Subject: Proposition d'assurance responsabilité professionnelle pour {company}
 Bonjour,
 
 Félicitations pour le lancement de {company}.
@@ -11,8 +11,7 @@ Bien à vous,
 
 {signatory}
 {company_name}, {address}
-Numéro d'entreprise {kbo_number} - FSMA {fsma_number}
+Numéro d'entreprise {kbo_number} - courtier : {fsma_number}
 {email} - {phone}
 
-Pourquoi ce mail ? Nous avons trouvé l'adresse e-mail générale de {company} dans {source}. Nous l'utilisons uniquement pour cette proposition et n'envoyons qu'un seul rappel au maximum.
-Vous ne souhaitez plus recevoir nos mails ? Répondez STOP ou écrivez à {optout_email}. Vie privée : {privacy_url}
+Nous avons trouvé l'adresse générale de {company} dans {source}. Vous préférez ne plus recevoir nos mails ? Répondez simplement STOP. Vie privée : {privacy_url}

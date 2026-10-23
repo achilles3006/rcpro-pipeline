@@ -7,7 +7,7 @@ import duckdb
 from rcpro import outreach
 
 SENDER = {k: "x" for k in ["signatory", "company_name", "address", "kbo_number", "fsma_number", "email", "phone",
-                           "optout_email", "privacy_url"]}
+                           "privacy_url"]}
 
 
 def con_with_leads():
@@ -32,8 +32,8 @@ def test_gate_and_log(tmp_path, monkeypatch):
         ("1", "info@studioa.be", "kbo", "nl"), ("5", "contact@ateliere.be", "website", "fr")]
     assert outreach.export(con, tmp_path / "m.csv") == 2
     rows = list(csv.DictReader((tmp_path / "m.csv").read_text(encoding="utf-8").splitlines()))
-    assert rows[0]["subject"].startswith("Reclame:") and "de wet van 9 mei 2019" in rows[0]["body"] and "STOP" in rows[0]["body"]
-    assert rows[1]["subject"].startswith("Publicité")
+    assert rows[0]["subject"].startswith("Voorstel beroepsaansprakelijkheidsverzekering") and "de wet van 9 mei 2019" in rows[0]["body"] and "STOP" in rows[0]["body"]
+    assert rows[1]["subject"].startswith("Proposition")
     assert outreach.candidates(con) == []  # logged: never twice
 
 
