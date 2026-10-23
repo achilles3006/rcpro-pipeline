@@ -22,6 +22,8 @@ import urllib.request
 from datetime import date
 from html import unescape
 
+from rcpro.llm import enterprise_number
+
 BASE = "https://www.ejustice.just.fgov.be"
 LIST = BASE + "/cgi_tsv/list.pl?language=nl&btw={}&page=1&la_search=f&view_numac="
 UA = "Mozilla/5.0 (compatible; omata-research/0.1; +mailto:achilles@omata.be)"
@@ -136,7 +138,7 @@ def import_deeds(con, path):
             continue
         try:
             r = json.loads(line)
-            ent, related = r["enterprise_number"], r["construction_related"]
+            ent, related = enterprise_number(r["enterprise_number"]), r["construction_related"]
             founders, summary, evidence = r.get("founders") or [], r.get("activity_summary"), r.get("evidence")
             if ent not in known:
                 raise ValueError(f"{ent} has no deed text")

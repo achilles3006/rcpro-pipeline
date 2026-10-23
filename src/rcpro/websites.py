@@ -32,6 +32,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from html import unescape
 from urllib.parse import urljoin, urlparse
 
+from rcpro.llm import enterprise_number
+
 UA = "Mozilla/5.0 (compatible; omata-research/0.1; +mailto:achilles@omata.be)"
 LEGAL = r"\b(bv|bvba|srl|sprl|nv|sa|comm\s?v|scomm|vof|snc|cv|scrl|sc|vzw|asbl|ivzw)\b"
 FREEMAIL = {"gmail.com", "hotmail.com", "outlook.com", "outlook.be", "hotmail.be", "live.be", "live.com", "yahoo.com",
@@ -298,7 +300,7 @@ def import_search(con, path, workers=12):
             continue
         try:
             r = json.loads(line)
-            ent = r["enterprise_number"]
+            ent = enterprise_number(r["enterprise_number"])
             values = [r.get(k) for k in ("website", "email", "source")]
             if not all(isinstance(v, (str, type(None))) for v in values):
                 raise ValueError("website, email and source must be strings or null")

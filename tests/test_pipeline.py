@@ -207,7 +207,7 @@ def test_deeds_round_trip(con, tmp_path):
         staatsblad.import_deeds(con, bad)
 
     answers = tmp_path / "answers.jsonl"
-    answers.write_text('{"enterprise_number": "0800.000.004", "founders": [{"name": "Nicolas Hernandez Vazquez", '
+    answers.write_text('{"enterprise_number": "0800000004", "founders": [{"name": "Nicolas Hernandez Vazquez", '  # no dots
                        '"role": "founder"}], "activity_summary": "Stability studies for buildings", '
                        '"construction_related": "yes", "evidence": "études de stabilité ... pour bâtiments"}\n')
     assert staatsblad.import_deeds(con, answers) == 1

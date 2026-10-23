@@ -17,6 +17,7 @@ import json
 
 from rcpro import staatsblad
 from rcpro.leads import SEGMENTS
+from rcpro.llm import enterprise_number
 
 ACT_2019 = "Act of 9 May 2019"
 
@@ -149,7 +150,7 @@ def import_llm(con, path):
             continue
         try:
             r = json.loads(line)
-            ent, mandatory, evidence = r["enterprise_number"], r["mandatory"], r.get("evidence") or []
+            ent, mandatory, evidence = enterprise_number(r["enterprise_number"]), r["mandatory"], r.get("evidence") or []
             if ent not in engineers:
                 raise ValueError(f"{ent} is not an engineer lead")
             if mandatory not in ("likely", "unlikely", "unknown"):

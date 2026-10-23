@@ -4,10 +4,17 @@ The input is sent in batches, so a long run never sends one huge request; the an
 all batches are written to one JSONL file for the module's import step.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
+
+
+def enterprise_number(value):
+    """KBO format (0800.000.004) for a number in an answer; Claude sometimes drops the dots or adds BE."""
+    digits = re.sub(r"\D", "", str(value))
+    return f"{digits[:4]}.{digits[4:7]}.{digits[7:]}" if len(digits) == 10 else value
 
 
 def run(prompt, in_path, out_path, tools=(), model="haiku", batch=10, timeout=1800):
