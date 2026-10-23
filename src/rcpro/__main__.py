@@ -11,6 +11,8 @@ Single steps:
     python -m rcpro staatsblad [--limit 20]       # founding deeds from the Staatsblad, newest first, each once (1 request / 5 s)
     python -m rcpro view                          # leads as a filterable table in the browser
     python -m rcpro codes
+    python -m rcpro outreach data/mails.csv [--limit 50] [--segment architects ...]  # today's mails, through the compliance gate
+    python -m rcpro optout info@example.be       # never mail this address (and its company) again
 
 Claude steps one by one (`run` does these with `claude -p`; see README):
     python -m rcpro export-unknown data/unknown.jsonl
@@ -30,7 +32,7 @@ from datetime import date, timedelta
 
 import duckdb
 
-from rcpro import classify, kbo, leads, llm, staatsblad, view, websites
+from rcpro import classify, kbo, leads, llm, outreach, staatsblad, view, websites
 
 
 def refresh(con, since, csv=None):
@@ -100,6 +102,11 @@ def main():
     sub.add_parser("staatsblad").add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
     sub.add_parser("view").add_argument("--html", default="data/leads.html")
     sub.add_parser("codes")
+    op = sub.add_parser("outreach")
+    op.add_argument("path")
+    op.add_argument("--limit", type=int, default=50)
+    op.add_argument("--segment", action="append", help=f"repeat for several; default the pilot: {', '.join(outreach.PILOT)}")
+    sub.add_parser("optout").add_argument("email")
     sub.add_parser("export-unknown").add_argument("path")
     sub.add_parser("import-llm").add_argument("path")
     sub.add_parser("export-deeds").add_argument("path")
@@ -133,6 +140,11 @@ def main():
     elif args.cmd == "codes":
         for segment, code, description in leads.codes(con):
             print(segment, code, description or "!! NOT FOUND in code.csv", sep="\t")
+    elif args.cmd == "outreach":
+        n = outreach.export(con, args.path, args.limit, tuple(args.segment or outreach.PILOT))
+        print(f"{n} mails written to {args.path} and logged; send them one by one, not in bulk")
+    elif args.cmd == "optout":
+        print(f"{args.email} suppressed ({outreach.optout(con, args.email)} companies)")
     elif args.cmd == "export-unknown":
         print(f"{classify.export_unknown(con, args.path)} unknown engineers written to {args.path}")
     elif args.cmd == "import-llm":

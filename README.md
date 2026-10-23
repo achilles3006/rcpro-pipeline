@@ -4,10 +4,7 @@ Finds newly started Belgian businesses that may need professional liability insu
 
 Input: the public KBO Open Data extract. Output: `data/leads.csv` and a filterable page `data/leads.html`, one row per new business.
 
-> **Before you contact anyone.** The pipeline is a lead list, not a green light for outreach. The legal questions in `docs/open-questions.md` (P0) are still open: KBO direct marketing ban, e-mail consent, FSMA registration. Until they are closed:
-> - never contact a row with `dm_allowed_from_kbo = false` (all sole traders);
-> - cite the law as a sales argument only for `sales_angle = legal_obligation`;
-> - `founders` are personal data: never use them for outreach.
+> **Before you contact anyone.** Mail only through `python -m rcpro outreach` (compliance gate: legal persons on impersonal addresses, opt-out list, log) and only after the go-live checklist in `docs/outreach-legal.md`. Never contact sole traders or personal addresses, cite the law only for `mandatory = yes`, and never use `founders` for outreach.
 
 ## 1. What you need
 
@@ -29,7 +26,7 @@ cd rcpro-pipeline
 python3 -m venv ~/.venvs/rcpro-pipeline
 source ~/.venvs/rcpro-pipeline/bin/activate
 pip install -e ".[dev]"
-pytest            # should end with "27 passed"
+pytest            # should end with "30 passed"
 ```
 
 Keep the venv outside iCloud-synced folders (Desktop, Documents): iCloud marks files in dot-folders as hidden, and Python 3.13 then skips the editable install. Activate the venv (`source ...`) in every new terminal.
@@ -130,6 +127,8 @@ python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
 python -m rcpro websites --limit 200
 python -m rcpro staatsblad --limit 200
 python -m rcpro view                            # writes and opens data/leads.html
+python -m rcpro outreach data/mails.csv --limit 20   # today's mails through the compliance gate, logged
+python -m rcpro optout info@example.be          # after a STOP or unsubscribe
 ```
 
 The Claude steps by hand (what `run` does automatically); after each import, run `leads` again:
@@ -159,7 +158,7 @@ Exports hold companies only, never sole traders' names. Answers are stored (`llm
 | 2 | `rcpro.classify` | Rules plus Claude step for unknown engineers |
 | 2 | `rcpro.websites` | In use; precision not yet checked by a labeller (`docs/contact-sources-measurement.md`) |
 | 2 | `rcpro.staatsblad` | In use |
-| 3 | Compliance gate | Not started (blocks outreach) |
+| 3 | `rcpro.outreach` (compliance gate) | Built; go-live checklist in `docs/outreach-legal.md` |
 | 4 | Playbook, templates | In Notion |
 | 5 | Validation with underwriter, KPIs | Not started |
 

@@ -1,0 +1,11 @@
+# Sender details printed in every mail (art. XII.6 and XII.13 WER, Insurance Act 2014).
+# `rcpro outreach` refuses to run while a field is empty or contains TODO.
+signatory = "TODO voornaam naam"
+company_name = "TODO juridische naam (bv. Omata BV)"
+address = "TODO straat nr, postcode gemeente"
+kbo_number = "TODO 0xxx.xxx.xxx"
+fsma_number = "TODO FSMA-inschrijvingsnummer (eigen of Induver, zie open question 4)"
+email = "TODO verkoop@..."
+phone = "TODO +32 ..."
+optout_email = "TODO afmelden@... (wordt elke werkdag verwerkt)"
+privacy_url = "TODO https://.../privacy"
