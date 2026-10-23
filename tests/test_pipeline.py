@@ -234,8 +234,22 @@ def test_deed_without_evidence_is_unknown(con, tmp_path):
     assert con.execute("SELECT construction_related FROM deed_extraction").fetchone()[0] == "unknown"
 
 
+def test_unknown_engineers_get_their_deed_first(con, monkeypatch):
+    con.execute("INSERT INTO enterprise (EnterpriseNumber, Status, TypeOfEnterprise, StartDate) VALUES "
+                "('0800.000.004', 'AC', '2', '01-01-2026')")  # oldest lead, but an engineer without code evidence
+    con.execute("INSERT INTO activity (EntityNumber, NaceVersion, NaceCode, Classification) VALUES "
+                "('0800.000.004', '2025', '71121', 'MAIN')")
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
+    asked = []
+    monkeypatch.setattr(staatsblad, "fetch_one", lambda ent: asked.append(ent) or (None, None, None))
+    staatsblad.fetch(con)
+    assert asked == ["0800.000.004", "0800.000.006", "0800.000.001"]
+
+
 def test_no_deed_is_retried_only_while_recent(con, monkeypatch):
     leads.build_leads(con, "2025-10-01")
+    classify.classify(con)
     staatsblad.tables(con)
     con.execute("""INSERT INTO deeds VALUES ('0800.000.001', NULL, NULL, NULL, '2026-01-10'),
         ('0800.000.006', NULL, NULL, NULL, '2026-06-01')""")  # started 5 and 8 January 2026
