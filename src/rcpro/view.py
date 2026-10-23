@@ -30,6 +30,12 @@ LABELS = {
         "psychologists": "Psychologists and psychotherapists", "management_consultants": "Management consultants",
         "it_consultants": "IT consultants", "real_estate": "Real estate agents and syndics",
         "insurance_intermediaries": "Insurance intermediaries",
+        "dentists": "Dentists and oral care", "doctors": "GPs and medical specialists",
+        "paramedics": "Physiotherapists, nurses and other paramedics", "veterinarians": "Veterinarians",
+        "technical_testing": "Technical testing (EPB, asbestos?)", "financial_planners": "Financial planners and advisers",
+        "recruitment": "Recruitment agencies", "marketing_communication": "Marketing, PR and design",
+        "legal_advisers": "Legal advisers (non-lawyers)", "real_estate_appraisers": "Real estate appraisers",
+        "legal_collective": "Lawyers, notaries, bailiffs, auditors",
     },
     "sales_angle": {
         "legal_obligation": "Legal obligation", "legal_unconfirmed": "Obligation not confirmed",

@@ -19,9 +19,21 @@ SEGMENTS = [
     ("accountants", "legal_obligation", ["69201", "69202"]),  # prospect or partner
     ("psychologists", "legal_unconfirmed", ["86931", "86932"]),
     ("management_consultants", "commercial_need", ["70200"]),
-    ("it_consultants", "commercial_need", ["62200"]),  # code to confirm, see `rcpro codes`
+    ("it_consultants", "commercial_need", ["62200", "62100", "62900"]),  # consultancy, software design, other IT services
+    # Healthcare and other FSMA-list professions: obligation not confirmed (docs/segments.md, gap check 23 Oct 2026)
+    ("dentists", "legal_unconfirmed", ["86230", "86991"]),
+    ("doctors", "legal_unconfirmed", ["86210", "86220"]),
+    ("paramedics", "legal_unconfirmed", ["86951", "86952", "86940", "86963", "86994", "86995", "86996"]),
+    ("veterinarians", "legal_unconfirmed", ["75000"]),
+    ("technical_testing", "legal_unconfirmed", ["71209"]),  # may hold EPB/EPC and asbestos experts, needs classification
+    ("financial_planners", "legal_unconfirmed", ["66199"]),  # only FSMA-licensed planners are obliged; code is broad
+    ("recruitment", "legal_unconfirmed", ["78100"]),
+    ("marketing_communication", "commercial_need", ["73110", "73300", "74120"]),
+    ("legal_advisers", "commercial_need", ["69109"]),  # legal services by non-lawyers
+    ("real_estate_appraisers", "commercial_need", ["68322"]),
     ("real_estate", "no_outreach", ["68310", "68321"]),
     ("insurance_intermediaries", "no_outreach", ["66220"]),
+    ("legal_collective", "no_outreach", ["69101", "69102", "69103", "69203"]),  # lawyers, notaries, bailiffs, auditors: collective policies
 ]
 
 

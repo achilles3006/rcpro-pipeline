@@ -30,8 +30,19 @@ FIXED = {
     "psychologists": ("unknown", None),  # obligation not confirmed by a lawyer
     "management_consultants": ("unlikely", None),
     "it_consultants": ("unlikely", None),
+    "dentists": ("unknown", None),  # healthcare: obligation not confirmed by a lawyer
+    "doctors": ("unknown", None),
+    "paramedics": ("unknown", None),
+    "veterinarians": ("unknown", None),
+    "technical_testing": ("unknown", None),
+    "financial_planners": ("unknown", None),  # Act of 25 April 2014 only for FSMA-licensed planners
+    "recruitment": ("unknown", None),
+    "marketing_communication": ("unlikely", None),
+    "legal_advisers": ("unlikely", None),
+    "real_estate_appraisers": ("unlikely", None),
     "real_estate": ("yes", "Act of 11 Feb 2013 (collective BIV policy)"),
     "insurance_intermediaries": ("yes", "Insurance Act of 4 April 2014"),
+    "legal_collective": ("unknown", None),  # collective policies via bar or chamber, to confirm
 }
 
 # Engineers (71121) fall under the 2019 Act only for real estate works.
