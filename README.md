@@ -127,9 +127,12 @@ python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
 python -m rcpro websites --limit 200
 python -m rcpro staatsblad --limit 200
 python -m rcpro view                            # writes and opens data/leads.html
+python -m rcpro notion                          # leads to the Notion database (see below)
 python -m rcpro outreach data/mails.csv --limit 20   # today's mails through the compliance gate, logged
 python -m rcpro optout info@example.be          # after a STOP or unsubscribe
 ```
+
+Notion: with `NOTION_TOKEN` (an internal integration at notion.so/profile/integrations, connected to the database via ••• → Connections) and `NOTION_LEADS_DB` (the database id) in the environment, `run` also updates the Notion database. Only new and changed rows are written; pages are never deleted, so notes added in Notion stay.
 
 The Claude steps by hand (what `run` does automatically); after each import, run `leads` again:
 
