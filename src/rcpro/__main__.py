@@ -10,6 +10,7 @@ Single steps:
     python -m rcpro websites [--limit 200]        # search company websites, newest first, each once
     python -m rcpro staatsblad [--limit 20]       # founding deeds from the Staatsblad, newest first, each once (1 request / 5 s)
     python -m rcpro view                          # leads as a filterable table in the browser
+    python -m rcpro notion                        # leads to the Notion database (NOTION_TOKEN, NOTION_LEADS_DB)
     python -m rcpro codes
     python -m rcpro outreach data/mails.csv [--limit 50] [--segment architects ...]  # today's mails, through the compliance gate
     python -m rcpro optout info@example.be       # never mail this address (and its company) again
@@ -32,7 +33,17 @@ from datetime import date, timedelta
 
 import duckdb
 
-from rcpro import classify, kbo, leads, llm, outreach, staatsblad, view, websites
+from rcpro import (
+    classify,
+    kbo,
+    leads,
+    llm,
+    notion,
+    outreach,
+    staatsblad,
+    view,
+    websites,
+)
 
 
 def refresh(con, since, csv=None):
@@ -82,6 +93,8 @@ def run(con, paths, since, limit, use_claude=True):
     for row in leads.summary(con):
         print(*row, sep="\t")
     print(f"{view.write_html(con, 'data/leads.html')} leads written to data/leads.html")
+    if os.environ.get("NOTION_TOKEN"):
+        print("Notion:", notion.sync(con))
     view.open_html("data/leads.html")
 
 
@@ -101,6 +114,7 @@ def main():
     sub.add_parser("websites").add_argument("--limit", type=int, help="search at most this many companies, newest first")
     sub.add_parser("staatsblad").add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
     sub.add_parser("view").add_argument("--html", default="data/leads.html")
+    sub.add_parser("notion")
     sub.add_parser("codes")
     op = sub.add_parser("outreach")
     op.add_argument("path")
@@ -137,6 +151,8 @@ def main():
     elif args.cmd == "view":
         print(f"{view.write_html(con, args.html)} leads written to {args.html}")
         view.open_html(args.html)
+    elif args.cmd == "notion":
+        print(notion.sync(con))
     elif args.cmd == "codes":
         for segment, code, description in leads.codes(con):
             print(segment, code, description or "!! NOT FOUND in code.csv", sep="\t")
