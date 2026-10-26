@@ -11,6 +11,10 @@ text to JSONL, Claude answers with prompts/extract_deeds.md, import_deeds stores
 in `deed_extraction`. classify uses construction_related as evidence for engineers the rules
 left unknown; apply adds founders and activity_summary to `leads`.
 Founder names are personal data (docs/open-questions.md, question 2): stored, not for outreach yet.
+
+contacts: the company's own e-mail address and website, which the articles may state (art. 2:31 WVV / CSA).
+Only values right after such a clause count, so the notary's, the accountant's and the partners' addresses
+("e-mailadres voor kennisgevingen") stay out. No LLM: a regex on the stored text.
 """
 
 import json
@@ -23,6 +27,7 @@ from datetime import date
 from html import unescape
 
 from rcpro.llm import enterprise_number
+from rcpro.websites import EMAIL
 
 BASE = "https://www.ejustice.just.fgov.be"
 LIST = BASE + "/cgi_tsv/list.pl?language=nl&btw={}&page=1&la_search=f&view_numac="
@@ -30,6 +35,25 @@ UA = "Mozilla/5.0 (compatible; omata-research/0.1; +mailto:achilles@omata.be)"
 FOUNDING = re.compile(r"OPRICHTING|CONSTITUTION|GR\S{1,2}NDUNG", re.IGNORECASE)
 DELAY = 5.0
 _last = 0.0
+# "L'adresse électronique de la société est : x@y.be", "E-mailadres: info@x.be", "Le site internet de la société est www.x.be"
+CLAUSE = re.compile(r"(?i)(adresse\s+(?:électronique|e-?mail|mail)|courriel|e-?mail(?:adres)?|site\s+internet|website)"
+                    r"([^@]{0,60}?)(" + EMAIL.pattern + r"|(?:https?://)?www\.[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}|https?://[\w.-]+\.[a-z]{2,})")
+NOT_COMPANY = re.compile(r"(?i)kennisgeving|notification|geboren|née?\b|wonende|domicili")
+THIRD_PARTY = re.compile(r"(?i)notai?r|naban|fednot|izimi|belgium\.be|fgov\.be|staatsblad|moniteur")
+
+
+def contacts(text):
+    """(emails, websites) the deed gives as the company's own, each a sorted list."""
+    emails, sites = set(), set()
+    for m in CLAUSE.finditer(text or ""):
+        value = m.group(3).lower().rstrip(".")
+        if NOT_COMPANY.search(m.group(2)) or THIRD_PARTY.search(value):
+            continue
+        if "@" in value:
+            emails.add(value)
+        else:
+            sites.add(re.sub(r"^https?://", "", value).removeprefix("www.").split("/")[0])
+    return sorted(emails), sorted(sites)
 
 
 def founding_pdf(html):
@@ -162,15 +186,22 @@ def import_deeds(con, path):
 
 
 def apply(con):
-    """Add founders ("Name (role); ...") and activity_summary to `leads`, for companies only."""
+    """Add founders ("Name (role); ..."), activity_summary, deed_email and deed_website to `leads`, for companies only."""
     tables(con)
+    con.execute("CREATE OR REPLACE TEMP TABLE deed_contacts (enterprise_number VARCHAR, email VARCHAR, website VARCHAR)")
+    found = [(ent, *contacts(text)) for ent, text in con.execute("SELECT enterprise_number, text FROM deeds WHERE text IS NOT NULL").fetchall()]
+    if rows := [(ent, "; ".join(e) or None, "; ".join(s) or None) for ent, e, s in found if e or s]:
+        con.executemany("INSERT INTO deed_contacts VALUES (?, ?, ?)", rows)
     cols = ", ".join(f"l.{c[0]}" for c in con.execute("DESCRIBE leads").fetchall()
-                     if c[0] not in ("founders", "activity_summary"))
+                     if c[0] not in ("founders", "activity_summary", "deed_email", "deed_website"))
     con.execute(f"""
         CREATE OR REPLACE TABLE leads AS
         SELECT {cols},
                CASE WHEN l.legal_form_type = 'company' THEN nullif(array_to_string(list_transform(x.founders,
                    p -> p.name || coalesce(' (' || p.role || ')', '')), '; '), '') END AS founders,
-               CASE WHEN l.legal_form_type = 'company' THEN x.activity_summary END AS activity_summary
+               CASE WHEN l.legal_form_type = 'company' THEN x.activity_summary END AS activity_summary,
+               CASE WHEN l.legal_form_type = 'company' THEN dc.email END AS deed_email,
+               CASE WHEN l.legal_form_type = 'company' THEN dc.website END AS deed_website
         FROM leads l LEFT JOIN deed_extraction x ON x.enterprise_number = l.enterprise_number
+        LEFT JOIN deed_contacts dc ON dc.enterprise_number = l.enterprise_number
     """)

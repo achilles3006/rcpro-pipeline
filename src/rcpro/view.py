@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 COLUMNS = ["start_date", "segment", "sales_angle", "mandatory", "legal_form_type", "juridical_form_label", "name",
-           "postcode", "municipality", "email", "phone", "website", "site", "site_level", "site_email", "site_phone", "founders", "activity_summary", "evidence", "needs_review",
+           "postcode", "municipality", "email", "phone", "website", "site", "site_level", "site_email", "site_phone", "deed_email", "deed_website", "founders", "activity_summary", "evidence", "needs_review",
            "dm_allowed_from_kbo", "enterprise_number"]
 
 # Display only: the table keeps its keys, the page shows clear English labels
@@ -19,6 +19,7 @@ HEADERS = {
     "name": "Name", "postcode": "Postcode", "municipality": "Municipality", "email": "Email",
     "phone": "Phone", "website": "Website", "site": "Website found", "site_level": "Match",
     "site_email": "Email on website", "site_phone": "Phone on website",
+    "deed_email": "Email (deed)", "deed_website": "Website (deed)",
     "founders": "Founders (deed)", "activity_summary": "Activity (deed)", "evidence": "Evidence", "needs_review": "Needs review",
     "dm_allowed_from_kbo": "Contact allowed (KBO)", "enterprise_number": "Enterprise number",
 }
@@ -121,7 +122,10 @@ function cell(c, v) {
     return `<td><a target="_blank" href="https://kbopub.economie.fgov.be/kbopub/zoeknummerform.html?nummer=${esc(v.replace(/\\./g, ""))}&actionLu=Zoek">${esc(v)}</a></td>`;
   if (c === "website" || c === "site")
     return "<td>" + v.split("; ").map(w => `<a target="_blank" href="${esc(/^https?:/.test(w) ? w : "https://" + w)}">${esc(w)}</a>`).join("<br>") + "</td>";
-  if (c === "email" || c === "site_email") return "<td>" + v.split("; ").map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join("<br>") + "</td>";
+  if (c === "email" || c === "site_email" || c === "deed_email") return "<td>" + v.split("; ").map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join("<br>") + "</td>";
+  // LinkedIn forbids scraping: a people search per founder, to open and check by hand
+  if (c === "founders")
+    return '<td class="wrapok">' + v.split("; ").map(f => `<a target="_blank" href="https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(f.replace(/ \\(.*\\)$/, ""))}">${esc(f)}</a>`).join("<br>") + "</td>";
   if (typeof v === "boolean") return `<td>${v ? "yes" : "no"}</td>`;
   if (c === "evidence") v = v.replaceAll(" MAIN", " main").replaceAll(" SECO", " secondary");
   return `<td${["evidence", "name", "founders", "activity_summary"].includes(c) ? ' class="wrapok"' : ""}>${esc(label(c, v))}</td>`;
@@ -134,7 +138,7 @@ function render() {
   const rows = DATA.rows.filter(r =>
     FILTERS.every(f => !val(f) || r[ix[f]] === val(f)) &&
     (!dm || r[ix.dm_allowed_from_kbo]) &&
-    (!contact || ["email", "phone", "website", "site", "site_email", "site_phone"].some(c => r[ix[c]])) &&
+    (!contact || ["email", "phone", "website", "site", "site_email", "site_phone", "deed_email", "deed_website"].some(c => r[ix[c]])) &&
     (!q || ["name", "postcode", "municipality", "enterprise_number"].some(f => (r[ix[f]] || "").toLowerCase().includes(q))));
   rows.sort((a, b) => {
     const x = a[sortCol] ?? "", y = b[sortCol] ?? "";

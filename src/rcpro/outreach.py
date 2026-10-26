@@ -3,7 +3,7 @@
 A lead is exported only when every rule below holds (see docs/outreach-legal.md):
 - a legal person (company form with legal personality), never a sole trader: art. XII.13 WER and
   KB 4 April 2003 allow advertising e-mail without consent only to legal persons on impersonal addresses;
-- the address is impersonal (info@, contact@, ...), so no personal data is used: this keeps KB 18 July 2008
+- the address (from KBO, the own website or the founding deed) is impersonal (info@, contact@, ...), so no personal data is used: this keeps KB 18 July 2008
   art. 2 (no KBO personal data for direct marketing) and the GDPR out of the way;
 - sales_angle is not no_outreach, the address is not on the suppression list, the company was never exported.
 Every exported row is logged in `outreach_log` (who, which address, from which source, when).
@@ -65,7 +65,8 @@ def optout(con, email, reason="opt-out"):
     ents = [r[0] for r in con.execute("""
         SELECT enterprise_number FROM leads
         WHERE list_contains(list_transform(string_split(lower(coalesce(email, '')), ';'), x -> trim(x)), ?)
-           OR lower(trim(site_email)) = ?""", [email, email]).fetchall()]
+           OR list_contains(list_transform(string_split(lower(coalesce(site_email, '') || ';' || coalesce(deed_email, '')), ';'),
+                            x -> trim(x)), ?)""", [email, email]).fetchall()]
     for ent in ents or [None]:
         con.execute("INSERT INTO suppression VALUES (?, ?, ?, ?)", [email, ent, reason, date.today()])
     return len(ents)
@@ -82,7 +83,7 @@ def sender():
 def candidates(con, segments=PILOT):
     _tables(con)
     rows = con.execute(f"""
-        SELECT enterprise_number, name, segment, mandatory, legal_basis, postcode, juridical_form, email, site_email
+        SELECT enterprise_number, name, segment, mandatory, legal_basis, postcode, juridical_form, email, site_email, deed_email
         FROM leads
         WHERE legal_form_type = 'company' AND sales_angle <> 'no_outreach'
           AND juridical_form IN ({", ".join("?" * len(LEGAL_PERSON_FORMS))})
@@ -93,8 +94,8 @@ def candidates(con, segments=PILOT):
     """, [*sorted(LEGAL_PERSON_FORMS), *segments]).fetchall()
     suppressed = {r[0] for r in con.execute("SELECT email FROM suppression").fetchall()}
     out = []
-    for ent, name, segment, mandatory, basis, postcode, _, kbo_email, site_email in rows:
-        found = [(e.strip().lower(), "kbo") for e in (kbo_email or "").split(";")] + [((site_email or "").strip().lower(), "website")]
+    for ent, name, segment, mandatory, basis, postcode, _, *addresses in rows:
+        found = [(e.strip().lower(), src) for src, value in zip(("kbo", "website", "deed"), addresses) for e in (value or "").split(";")]
         found = [(e, src) for e, src in found if e and impersonal(e) and e not in suppressed]
         if found:
             out.append({"enterprise_number": ent, "name": name, "segment": segment, "email": found[0][0], "source": found[0][1],
@@ -106,8 +107,10 @@ def render(lead, s):
     """(template name, subject, body) for one lead. The law is cited only when the obligation is settled (mandatory = yes)."""
     name = f"{lead['lang']}_{'legal' if lead['legal'] else 'commercial'}"
     subject, body = (TEMPLATES / f"{name}.txt").read_text(encoding="utf-8").split("\n", 1)
-    source = {"nl": {"kbo": "de Kruispuntbank van Ondernemingen", "website": "uw website"},
-              "fr": {"kbo": "la Banque-Carrefour des Entreprises", "website": "votre site web"}}[lead["lang"]][lead["source"]]
+    source = {"nl": {"kbo": "de Kruispuntbank van Ondernemingen", "website": "uw website",
+                     "deed": "uw oprichtingsakte in het Belgisch Staatsblad"},
+              "fr": {"kbo": "la Banque-Carrefour des Entreprises", "website": "votre site web",
+                     "deed": "votre acte de constitution au Moniteur belge"}}[lead["lang"]][lead["source"]]
     values = {**s, "company": lead["name"] or "", "source": source,
               "law": LAW.get(lead["legal_basis"], {}).get(lead["lang"], "")}
     return name, subject.removeprefix("Subject: ").format(**values), body.strip().format(**values)

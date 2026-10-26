@@ -28,3 +28,11 @@ def test_founding_pdf_dutch_and_missing():
     assert staatsblad.founding_pdf(nl)[1] == date(2026, 8, 27)
     assert staatsblad.founding_pdf(LIST.replace("CONSTITUTION", "STATUTS")) == (None, None)
     assert staatsblad.founding_pdf("<html>Geen resultaten</html>") == (None, None)
+
+
+def test_contacts_takes_only_the_company_clause():
+    text = """3. Site internet et adresse électronique Le site internet de la société est https://www.x-bureau.be/ L’adresse
+    électronique de la société est : Info@X-Bureau.be. Toute communication ... 1. De heer Peeters, wonende te Gent,
+    e-mailadres voor kennisgevingen: jan.peeters@gmail.com. Volmacht aan Accofid (info@accofid.be). Notaris: www.notaire.be"""
+    assert staatsblad.contacts(text) == (["info@x-bureau.be"], ["x-bureau.be"])
+    assert staatsblad.contacts(None) == ([], [])

@@ -18,7 +18,7 @@ Stand 23 oktober 2026. Dit is een werkdocument, geen juridisch advies. De punten
 `python -m rcpro outreach data/mails.csv` (in `src/rcpro/outreach.py`) neemt een lead alleen mee als alles klopt:
 
 1. vennootschap met rechtspersoonlijkheid (KBO-rechtsvorm 610, 612, 011, 014, 706, 017, 125, 026);
-2. een onpersoonlijk adres uit de KBO of van de eigen website (lijst `IMPERSONAL`, bv. info, contact, hello, office);
+2. een onpersoonlijk adres uit de KBO, van de eigen website of uit de clausule "e-mailadres van de vennootschap" in de oprichtingsakte (art. 2:31 WVV) (lijst `IMPERSONAL`, bv. info, contact, hello, office);
 3. `sales_angle` is niet `no_outreach`, segment zit in de pilot (architecten, interieurarchitecten) tenzij `--segment` iets anders zegt;
 4. adres en bedrijf staan niet op de suppressielijst, en het bedrijf is nog nooit gemaild.
 
