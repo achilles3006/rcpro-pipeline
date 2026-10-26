@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 COLUMNS = ["start_date", "segment", "sales_angle", "mandatory", "legal_form_type", "juridical_form_label", "name",
-           "postcode", "municipality", "email", "phone", "website", "site", "site_level", "site_email", "site_phone", "deed_email", "deed_website", "founders", "activity_summary", "evidence", "needs_review",
+           "postcode", "municipality", "email", "phone", "website", "site", "site_level", "site_email", "site_phone", "deed_email", "deed_website", "outreach_email", "founders", "activity_summary", "evidence", "needs_review",
            "dm_allowed_from_kbo", "enterprise_number"]
 
 # Display only: the table keeps its keys, the page shows clear English labels
@@ -19,7 +19,7 @@ HEADERS = {
     "name": "Name", "postcode": "Postcode", "municipality": "Municipality", "email": "Email",
     "phone": "Phone", "website": "Website", "site": "Website found", "site_level": "Match",
     "site_email": "Email on website", "site_phone": "Phone on website",
-    "deed_email": "Email (deed)", "deed_website": "Website (deed)",
+    "deed_email": "Email (deed)", "deed_website": "Website (deed)", "outreach_email": "Email for outreach",
     "founders": "Founders (deed)", "activity_summary": "Activity (deed)", "evidence": "Evidence", "needs_review": "Needs review",
     "dm_allowed_from_kbo": "Contact allowed (KBO)", "enterprise_number": "Enterprise number",
 }
@@ -53,7 +53,10 @@ def write_html(con, path):
     """).fetchall()
     data = [[str(v) if k == "start_date" else "; ".join(v) if k == "evidence" else v
              for k, v in zip(COLUMNS, row)] for row in rows]
-    payload = json.dumps({"columns": COLUMNS, "headers": HEADERS, "labels": LABELS, "rows": data}, ensure_ascii=False).replace("</", "<\\/")
+    has_mx = con.execute("SELECT count(*) FROM information_schema.tables WHERE table_name = 'mx_check'").fetchone()[0]
+    no_mx = [r[0] for r in con.execute("SELECT domain FROM mx_check WHERE NOT has_mx").fetchall()] if has_mx else []
+    payload = json.dumps({"columns": COLUMNS, "headers": HEADERS, "labels": LABELS, "rows": data, "no_mx": no_mx},
+                         ensure_ascii=False).replace("</", "<\\/")
     Path(path).write_text(PAGE.replace("__DATA__", payload), encoding="utf-8")
     return len(rows)
 
@@ -79,6 +82,7 @@ PAGE = """<!doctype html>
   th { position: sticky; top: 0; background: var(--head); cursor: pointer; user-select: none; }
   td.wrapok { white-space: normal; min-width: 160px; }
   a { color: var(--accent); }
+  a.nomx { outline: 2px solid #d70015; outline-offset: 1px; border-radius: 3px; }
 </style></head><body>
 <h1>RC pro leads</h1>
 <div class="bar">
@@ -97,6 +101,7 @@ PAGE = """<!doctype html>
 const DATA = __DATA__;
 const C = DATA.columns, ix = Object.fromEntries(C.map((c, i) => [c, i]));
 const LIMIT = 500, FILTERS = ["segment", "sales_angle", "mandatory", "legal_form_type", "juridical_form_label"];
+const NO_MX = new Set(DATA.no_mx);
 const label = (c, v) => (DATA.labels[c] || {})[v] ?? v;
 let sortCol = ix.start_date, sortDesc = true;
 
@@ -122,7 +127,9 @@ function cell(c, v) {
     return `<td><a target="_blank" href="https://kbopub.economie.fgov.be/kbopub/zoeknummerform.html?nummer=${esc(v.replace(/\\./g, ""))}&actionLu=Zoek">${esc(v)}</a></td>`;
   if (c === "website" || c === "site")
     return "<td>" + v.split("; ").map(w => `<a target="_blank" href="${esc(/^https?:/.test(w) ? w : "https://" + w)}">${esc(w)}</a>`).join("<br>") + "</td>";
-  if (c === "email" || c === "site_email" || c === "deed_email") return "<td>" + v.split("; ").map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join("<br>") + "</td>";
+  if (c === "email" || c === "site_email" || c === "deed_email" || c === "outreach_email") return "<td>" + v.split("; ").map(e => (NO_MX.has(e.split("@")[1]?.trim().toLowerCase())
+    ? `<a class="nomx" title="Domain takes no mail (no MX record)" href="mailto:${esc(e)}">${esc(e)}</a>`
+    : `<a href="mailto:${esc(e)}">${esc(e)}</a>`)).join("<br>") + "</td>";
   // LinkedIn forbids scraping: a people search per founder, to open and check by hand
   if (c === "founders")
     return '<td class="wrapok">' + v.split("; ").map(f => `<a target="_blank" href="https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(f.replace(/ \\(.*\\)$/, ""))}">${esc(f)}</a>`).join("<br>") + "</td>";

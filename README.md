@@ -59,7 +59,7 @@ Options of `run`:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--since YYYY-MM-DD` | one year ago | only businesses started on or after this date |
+| `--since YYYY-MM-DD` | 2025-10-01 (`FIRST_START` in `src/rcpro/leads.py`) | only businesses started on or after this date; fixed, and a lead that drops out of a newer extract stays, so the list only grows |
 | `--limit N` | 100 | companies per network step |
 | `--no-claude` | off | skip the three Claude steps |
 
@@ -94,7 +94,9 @@ Each step can also run on its own; see `python -m rcpro --help` and section 9.
 | `dm_allowed_from_kbo` | false for every sole trader: **do not contact** |
 | `mandatory`, `evidence`, `legal_basis`, `needs_review` | is the cover mandatory, on what evidence, which law, and whether a person should check |
 | `site_level`, `site`, `site_email`, `site_phone` | website found by the pipeline and the contact data on it; kept apart from KBO because the legal basis may differ |
-| `founders`, `activity_summary` | from the founding deed (companies only) |
+| `founders`, `activity_summary` | from the founding deed (companies only); in `leads.html` each founder links to a LinkedIn people search, to check by hand |
+| `email_mx_ok` | at least one e-mail domain of the company takes mail (MX record); empty = not checked. Says nothing about the mailbox itself |
+| `outreach_email` | the address the outreach gate would use (legal person, impersonal, domain with MX, not opted out); filter on "is not empty" in Notion |
 
 Segments and how to approach each one: `docs/segments.md`.
 

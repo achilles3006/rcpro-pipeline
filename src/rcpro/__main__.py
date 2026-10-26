@@ -12,6 +12,7 @@ Single steps:
     python -m rcpro view                          # leads as a filterable table in the browser
     python -m rcpro notion                        # leads to the Notion database (NOTION_TOKEN, NOTION_LEADS_DB)
     python -m rcpro codes
+    python -m rcpro mx                            # MX check of every e-mail domain in leads (email_mx_ok, outreach_email)
     python -m rcpro outreach data/mails.csv [--limit 50] [--segment architects ...]  # today's mails, through the compliance gate
     python -m rcpro optout info@example.be       # never mail this address (and its company) again
 
@@ -29,7 +30,6 @@ The database is data/kbo.duckdb, or the path in RCPRO_DB.
 import argparse
 import os
 import subprocess
-from datetime import date, timedelta
 
 import duckdb
 
@@ -52,6 +52,7 @@ def refresh(con, since, csv=None):
     classify.classify(con)
     websites.apply(con)
     staatsblad.apply(con)
+    outreach.apply(con)
     if csv:
         path = csv.replace("'", "''")
         con.execute(f"COPY leads TO '{path}' (HEADER)")
@@ -89,6 +90,7 @@ def run(con, paths, since, limit, use_claude=True):
     refresh(con, since)
     if use_claude:
         claude_steps(con, since, limit)
+    print("MX check (e-mail domains that take mail):", outreach.check_mx(con))
     refresh(con, since, "data/leads.csv")
     for row in leads.summary(con):
         print(*row, sep="\t")
@@ -103,19 +105,20 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     rp = sub.add_parser("run")
     rp.add_argument("paths", nargs="*", help="KBO full (*_Full.zip) and/or update zips; none: use the database as it is")
-    rp.add_argument("--since", default=str(date.today() - timedelta(days=365)), help="YYYY-MM-DD, default one year ago")
+    rp.add_argument("--since", default=leads.FIRST_START, help=f"YYYY-MM-DD, default {leads.FIRST_START}")
     rp.add_argument("--limit", type=int, default=100, help="per network step: companies searched, deeds, web searches")
     rp.add_argument("--no-claude", action="store_true", help="skip the claude -p steps")
     sub.add_parser("full").add_argument("path")
     sub.add_parser("update").add_argument("paths", nargs="+")
     lp = sub.add_parser("leads")
-    lp.add_argument("--since", required=True, help="YYYY-MM-DD")
+    lp.add_argument("--since", default=leads.FIRST_START, help=f"YYYY-MM-DD, default {leads.FIRST_START}")
     lp.add_argument("--csv", help="also write the leads table to this CSV")
     sub.add_parser("websites").add_argument("--limit", type=int, help="search at most this many companies, newest first")
     sub.add_parser("staatsblad").add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
     sub.add_parser("view").add_argument("--html", default="data/leads.html")
     sub.add_parser("notion")
     sub.add_parser("codes")
+    sub.add_parser("mx")
     op = sub.add_parser("outreach")
     op.add_argument("path")
     op.add_argument("--limit", type=int, default=50)
@@ -153,6 +156,9 @@ def main():
         view.open_html(args.html)
     elif args.cmd == "notion":
         print(notion.sync(con))
+    elif args.cmd == "mx":
+        print(outreach.check_mx(con))
+        outreach.apply(con)
     elif args.cmd == "codes":
         for segment, code, description in leads.codes(con):
             print(segment, code, description or "!! NOT FOUND in code.csv", sep="\t")

@@ -3,7 +3,7 @@
 import duckdb
 import pytest
 
-from rcpro import classify, kbo, leads, staatsblad, websites
+from rcpro import classify, kbo, leads, outreach, staatsblad, websites
 
 FULL = {
     "meta.csv": "Variable,Value\nExtractNumber,516\n",
@@ -109,6 +109,14 @@ def test_leads(con):
     ]
 
 
+def test_leads_only_grow(con):
+    leads.build_leads(con, "2025-10-01")
+    classify.classify(con)  # enrichment columns on the old table must not break the rebuild
+    con.execute("UPDATE enterprise SET Status = 'ST' WHERE EnterpriseNumber = '0800.000.001'")
+    assert leads.build_leads(con, "2025-10-01") == 3
+    assert con.execute("SELECT name FROM leads WHERE enterprise_number = '0800.000.001'").fetchone() == ("Studio A",)
+
+
 def test_codes_flags_unknown_code(con):
     found = {code: desc for _, code, desc in leads.codes(con)}
     assert found["71111"] == "Architecten"
@@ -158,6 +166,7 @@ def test_view_html(con, tmp_path):
     classify.classify(con)
     websites.apply(con)
     staatsblad.apply(con)
+    outreach.apply(con)
     from rcpro import view
     assert view.write_html(con, tmp_path / "leads.html") == 3
     html = (tmp_path / "leads.html").read_text()

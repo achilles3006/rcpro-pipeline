@@ -55,3 +55,25 @@ def test_sender_placeholders_block_export():
     import pytest
     with pytest.raises(SystemExit, match="sender.toml"):
         outreach.sender()  # the committed file still holds TODOs
+
+
+def test_mx_columns_and_gate():
+    con = con_with_leads()
+    con.execute("CREATE TABLE mx_check (domain VARCHAR PRIMARY KEY, has_mx BOOLEAN, checked DATE)")
+    con.executemany("INSERT INTO mx_check VALUES (?, ?, current_date)", [("studioa.be", False), ("f.be", True), ("gmail.com", True)])
+    outreach.apply(con)
+    got = dict(con.execute("SELECT enterprise_number, (email_mx_ok, outreach_email) FROM leads").fetchall())
+    assert got["1"] == (False, None)  # domain without MX: not mailable
+    assert got["6"] == (True, "hallo@f.be")
+    assert got["5"] == (None, "contact@ateliere.be")  # not checked yet
+    assert got["3"] == (None, None)  # personal address
+    assert "1" not in [c["enterprise_number"] for c in outreach.candidates(con)]
+
+
+def test_mx_answer():
+    # gmail.com MX query and answer with a compressed name; then the same with a null MX (RFC 7505)
+    q = bytes.fromhex("1234 8180 0001 0001 0000 0000") + b"\x05gmail\x03com\x00" + bytes.fromhex("000f 0001")
+    mx = bytes.fromhex("c00c 000f 0001 00000e10 0009 0005") + b"\x04mail\xc0\x0c"
+    assert outreach.mx_answer(q + mx)
+    assert not outreach.mx_answer(q + bytes.fromhex("c00c 000f 0001 00000e10 0003 0000 00"))
+    assert not outreach.mx_answer(bytes.fromhex("1234 8183 0001 0000 0000 0000") + q[12:])

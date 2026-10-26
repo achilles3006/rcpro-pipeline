@@ -50,8 +50,13 @@ def _segment_table(con):
     con.executemany("INSERT INTO segment VALUES (?, ?, ?, ?)", _segment_rows())
 
 
-def build_leads(con, since):
-    """(Re)build the `leads` table for businesses started on or after `since` (YYYY-MM-DD)."""
+# The list only grows: a fixed first start date, not a rolling window, so older starters stay in.
+FIRST_START = "2025-10-01"
+
+
+def build_leads(con, since=FIRST_START):
+    """(Re)build the `leads` table for businesses started on or after `since` (YYYY-MM-DD).
+    Leads that drop out of a newer extract (stopped, gone, other main code) stay as they were: the list only grows."""
     _segment_table(con)
     con.execute("CREATE OR REPLACE TEMP TABLE legal_form (code VARCHAR, short VARCHAR)")
     con.executemany("INSERT INTO legal_form VALUES (?, ?)", list(LEGAL_FORMS.items()))
@@ -62,7 +67,7 @@ def build_leads(con, since):
         SELECT EstablishmentNumber, EnterpriseNumber FROM establishment
     """)
     con.execute("""
-        CREATE OR REPLACE TABLE leads AS
+        CREATE OR REPLACE TEMP TABLE new_leads AS
         WITH picked AS (
             SELECT e.ent, arg_min(s.segment, s.priority) AS segment, arg_min(s.sales_angle, s.priority) AS sales_angle
             FROM activity a
@@ -116,6 +121,11 @@ def build_leads(con, since):
         LEFT JOIN legal_form lf ON lf.code = en.JuridicalForm
         WHERE en.Status = 'AC' AND strptime(en.StartDate, '%d-%m-%Y')::DATE >= ?::DATE
     """, [since])
+    if con.execute("SELECT count(*) FROM information_schema.tables WHERE table_name = 'leads' AND table_type = 'BASE TABLE'").fetchone()[0]:
+        cols = ", ".join(c[0] for c in con.execute("DESCRIBE new_leads").fetchall())
+        con.execute(f"""INSERT INTO new_leads SELECT {cols} FROM leads
+                        WHERE enterprise_number NOT IN (SELECT enterprise_number FROM new_leads)""")
+    con.execute("CREATE OR REPLACE TABLE leads AS SELECT * FROM new_leads")
     return con.execute("SELECT count(*) FROM leads").fetchone()[0]
 
 
