@@ -16,12 +16,21 @@ Source: Notion, "responsabilité civile professionnelle scraping research". Keep
 3. Contact data in KBO is thin: 9 to 24% e-mail, websites 0 to 3%.
 4. Order of Architects public search is the best register, but not yet legally cleared and not reachable from the workspace.
 
-## Phase 2: identification and classification
+## Phase 2: identification and classification (updated 23 October 2026)
 
-1. Architects, interior architects and land surveyors (2,057 leads) are settled by activity code.
-2. Engineers (2,298 leads) are hard: 18% likely, 24% unlikely, 58% unknown.
-3. Website discovery yields little: 7% of companies, 2% of sole traders from KBO; 0 of 10 by search.
-4. "Already insured" cannot be estimated from open data.
+Idea: decide per lead whether the legal obligation applies, with the cheapest evidence first, and only spend effort on leads that can be contacted. Figures are indicative; `python -m rcpro leads` prints the current ones.
+
+1. **Segment by main activity code.** Each lead gets a segment and a sales angle from its main NACE-BEL 2025 code (`SEGMENTS` in `src/rcpro/leads.py`, `docs/segments.md`). The gap check of 23 Oct added healthcare, other FSMA-list professions and more commercial segments; outreach stays limited to the pilot.
+2. **Rules on codes settle most segments.** Architects, interior architects and land surveyors are settled by code (about 2,000 leads). So are the other segments, with a fixed answer per segment (`FIXED` in `rcpro.classify`).
+3. **Engineers need evidence beyond the code.** The 2019 Act only applies to real estate works. The order of evidence, strongest first:
+   - main and secondary codes (construction or not);
+   - the purpose clause of the founding deed in the Staatsblad, read by Claude (construction yes/no with a quote);
+   - Claude on name and codes, for what is still unknown.
+   No evidence means "unknown". An engineer outside construction moves to `commercial_need` instead of being dropped. Since the deeds and the LLM step, unknown fell from about 58% to about a third; it keeps changing while deeds are fetched.
+4. **Qualification finishes in the first conversation** (decision 5). Leads that stay unknown are asked the construction question, not discarded.
+5. **Only companies go through the network and LLM steps.** Sole traders stay in the list for sizing but are never searched, exported to Claude or contacted (KBO direct marketing ban).
+6. **Contact data: matches with a confidence level.** Domains are guessed from the name, the KBO website and the e-mail domain. A site is kept as verified (own enterprise number on the site) or probable (name plus municipality); weak name-only matches are dropped. A Claude web search fills in for companies with nothing, but its answer goes through the same check. Yield is low (a few percent of companies) because most starters have no site yet, not because the guessing is poor (`docs/domain-guess-v2.md`).
+7. **"Already insured" cannot be estimated from open data.** It comes from the underwriter or the Order (open question 7).
 
 ## Phase 4: conversation
 

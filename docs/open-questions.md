@@ -16,7 +16,7 @@ Ordered by what blocks what. P0 blocks any outreach. P1 blocks a trustworthy pil
 7. **Already insured at registration.** Does the Order or a client contract force architects to hold a policy before or at registration, and what share of starters buys through employer, Order or group policy (for example VMx)? If most are insured on day one, the addressable share is far smaller than 170 a month. Owner: Order contact, underwriter.
 8. **Indexed 2026 minimum amounts** under the 2019 Act. Owner: underwriter.
 9. **Pilot scope.** Architect companies only (about 55 a month) or wait for the register answer to include sole traders. Decide with the legal answer on items 1 and 2.
-10. **Engineers.** Join the pilot now or after architects. Classification leaves 58% unknown, so qualification must happen in the first conversation.
+10. **Engineers.** Join the pilot now or after architects. Codes, deeds and the LLM step still leave about a third unknown, so qualification must happen in the first conversation.
 11. **Statistical power.** Phase 4 plans to change one element at a time per segment and language. At about 55 contacts a month and a low reply rate, versions cannot be compared. Define the minimum sample per test and accept fewer variants.
 
 ## P2: data and tooling
