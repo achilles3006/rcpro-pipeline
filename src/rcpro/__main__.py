@@ -11,6 +11,7 @@ Single steps:
     python -m rcpro staatsblad [--limit 20]       # founding deeds from the Staatsblad, newest first, each once (1 request / 5 s)
     python -m rcpro view                          # leads as a filterable table in the browser
     python -m rcpro notion                        # leads to the Notion database (NOTION_TOKEN, NOTION_LEADS_DB)
+    python -m rcpro notion-login                  # one-time OAuth consent; tokens go to ~/.config/rcpro.env
     python -m rcpro codes
     python -m rcpro mx                            # MX check of every e-mail domain in leads (email_mx_ok, outreach_email)
     python -m rcpro outreach data/mails.csv [--limit 50] [--segment architects ...]  # today's mails, through the compliance gate
@@ -117,6 +118,7 @@ def main():
     sub.add_parser("staatsblad").add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
     sub.add_parser("view").add_argument("--html", default="data/leads.html")
     sub.add_parser("notion")
+    sub.add_parser("notion-login")
     sub.add_parser("codes")
     sub.add_parser("mx")
     op = sub.add_parser("outreach")
@@ -132,6 +134,8 @@ def main():
     sub.add_parser("import-search").add_argument("path")
     args = p.parse_args()
 
+    if args.cmd == "notion-login":  # before the database: a running pipeline may hold its lock
+        return print(notion.login())
     con = duckdb.connect(os.environ.get("RCPRO_DB", "data/kbo.duckdb"))
     if args.cmd == "run":
         run(con, args.paths, args.since, args.limit, not args.no_claude)

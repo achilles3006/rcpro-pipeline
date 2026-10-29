@@ -59,3 +59,32 @@ def test_sync_writes_only_new_and_changed(monkeypatch):
     assert created["enterprise_number"] == {"title": [{"text": {"content": "0800.000.003"}}]}
     assert created["postcode"] == {"number": 1000.0} and created["start_date"] == {"date": {"start": "2026-01-07"}}
     assert notion.norm("date", date(2026, 1, 7)) == "2026-01-07"
+
+
+def test_expired_oauth_token_is_refreshed_and_saved(tmp_path, monkeypatch):
+    import io
+    import json
+    import urllib.error
+    env = tmp_path / "rcpro.env"
+    env.write_text("export NOTION_TOKEN=old\nexport NOTION_LEADS_DB=db1\n")
+    monkeypatch.setattr(notion, "ENV_FILE", env)
+    monkeypatch.setattr(notion, "DELAY", 0)
+    for k, v in {"NOTION_TOKEN": "old", "NOTION_REFRESH_TOKEN": "r1", "NOTION_CLIENT_ID": "id", "NOTION_CLIENT_SECRET": "s"}.items():
+        monkeypatch.setenv(k, v)
+    seen = []
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url.removeprefix(notion.API), req.headers["Authorization"]))
+        if req.full_url.endswith("/oauth/token"):
+            assert json.loads(req.data) == {"grant_type": "refresh_token", "refresh_token": "r1"}
+            return io.BytesIO(b'{"access_token": "new", "refresh_token": "r2"}')
+        if req.headers["Authorization"] == "Bearer old":
+            raise urllib.error.HTTPError(req.full_url, 401, "expired", {}, io.BytesIO(b"{}"))
+        return io.BytesIO(b'{"ok": true}')
+
+    monkeypatch.setattr(notion.urllib.request, "urlopen", urlopen)
+    assert notion._call("GET", "/users/me") == {"ok": True}
+    assert [s[0] for s in seen] == ["/users/me", "/oauth/token", "/users/me"]
+    assert seen[1][1].startswith("Basic ") and seen[2][1] == "Bearer new"
+    assert env.read_text() == "export NOTION_TOKEN=new\nexport NOTION_LEADS_DB=db1\nexport NOTION_REFRESH_TOKEN=r2\n"
+    assert env.stat().st_mode & 0o777 == 0o600

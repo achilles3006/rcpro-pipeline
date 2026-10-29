@@ -136,7 +136,9 @@ python -m rcpro outreach data/mails.csv --limit 20   # today's mails through the
 python -m rcpro optout info@example.be          # after a STOP or unsubscribe
 ```
 
-Notion: with `NOTION_TOKEN` (an internal integration at notion.so/profile/integrations, connected to the database via ••• → Connections) and `NOTION_LEADS_DB` (the database id) in the environment, `run` also updates the Notion database. Only new and changed rows are written; pages are never deleted, so notes added in Notion stay.
+Notion: with `NOTION_TOKEN` (an internal integration at notion.so/profile/integrations, connected to the database via ••• → Connections) and `NOTION_LEADS_DB` (the database id) in the environment, `run` also updates the Notion database.
+
+Without rights to create an internal integration, use OAuth: create an OAuth connection at notion.so/profile/integrations with redirect URI `http://localhost:8765/callback`, put `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` and `NOTION_LEADS_DB` in `~/.config/rcpro.env` (`chmod 600`, never in git), `source` it, and run `python -m rcpro notion-login` once. In the browser, allow access and pick the leads database. The access and refresh token are written to the same file; an expired token is refreshed during the sync. Only new and changed rows are written; pages are never deleted, so notes added in Notion stay.
 
 The Claude steps by hand (what `run` does automatically); after each import, run `leads` again:
 
