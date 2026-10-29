@@ -11,7 +11,7 @@ python -m rcpro mx
 python -m rcpro staatsblad --mailable --limit 200
 python -m rcpro export-deeds data/deeds.jsonl
 if [[ -s data/deeds.jsonl ]]; then
-  claude -p --model haiku "$(cat prompts/extract_deeds.md)" < data/deeds.jsonl > data/deeds_llm.jsonl
+  python -c "from rcpro import llm; llm.run('extract_deeds.md', 'data/deeds.jsonl', 'data/deeds_llm.jsonl')"  # in batches of 10
   python -m rcpro import-deeds data/deeds_llm.jsonl
 fi
 python -m rcpro leads --csv data/leads.csv | tail -1
