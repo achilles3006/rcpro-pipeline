@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Copy to ~/Library/LaunchAgents/ and load with: launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/be.omata.rcpro.nightly.plist
+     Runs every night at 02:00; a run missed while the Mac sleeps starts when it wakes. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>be.omata.rcpro.nightly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/achillescombes/Projects/rcpro-pipeline/scripts/nightly.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>2</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/achillescombes/Projects/rcpro-pipeline/data/nightly.log</string>
+  <key>StandardErrorPath</key><string>/Users/achillescombes/Projects/rcpro-pipeline/data/nightly.log</string>
+</dict>
+</plist>

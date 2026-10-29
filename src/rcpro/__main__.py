@@ -8,7 +8,7 @@ Single steps:
     python -m rcpro update data/KboOpenData_0518_*_Update.zip
     python -m rcpro leads --since 2025-10-01 [--csv data/leads.csv]
     python -m rcpro websites [--limit 200]        # search company websites, newest first, each once
-    python -m rcpro staatsblad [--limit 20]       # founding deeds from the Staatsblad, newest first, each once (1 request / 5 s)
+    python -m rcpro staatsblad [--limit 20] [--mailable]  # founding deeds from the Staatsblad, newest first, each once (1 request / 5 s)
     python -m rcpro view                          # leads as a filterable table in the browser
     python -m rcpro notion                        # leads to the Notion database (NOTION_TOKEN, NOTION_LEADS_DB)
     python -m rcpro notion-login                  # one-time OAuth consent; tokens go to ~/.config/rcpro.env
@@ -115,7 +115,9 @@ def main():
     lp.add_argument("--since", default=leads.FIRST_START, help=f"YYYY-MM-DD, default {leads.FIRST_START}")
     lp.add_argument("--csv", help="also write the leads table to this CSV")
     sub.add_parser("websites").add_argument("--limit", type=int, help="search at most this many companies, newest first")
-    sub.add_parser("staatsblad").add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
+    sp = sub.add_parser("staatsblad")
+    sp.add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
+    sp.add_argument("--mailable", action="store_true", help="only companies with an outreach_email")
     sub.add_parser("view").add_argument("--html", default="data/leads.html")
     sub.add_parser("notion")
     sub.add_parser("notion-login")
@@ -153,7 +155,7 @@ def main():
             print(level, n, sep="\t")
         websites.apply(con)
     elif args.cmd == "staatsblad":
-        for status, n in sorted(staatsblad.fetch(con, args.limit).items()):
+        for status, n in sorted(staatsblad.fetch(con, args.limit, args.mailable).items()):
             print(status, n, sep="\t")
     elif args.cmd == "view":
         print(f"{view.write_html(con, args.html)} leads written to {args.html}")

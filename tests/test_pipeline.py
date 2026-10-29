@@ -272,6 +272,9 @@ def test_no_deed_is_retried_only_while_recent(con, monkeypatch):
     assert asked == ["0800.000.001"]  # sole trader 0800.000.002 never, 0800.000.006 gave up after 60 days
     staatsblad.fetch(con)
     assert asked == ["0800.000.001"]  # just checked: not again within a week
+    con.execute("DELETE FROM deeds")
+    staatsblad.fetch(con, mailable=True)
+    assert asked == ["0800.000.001"]  # no company in this fixture has an outreach_email
 
 
 def test_web_search_round_trip(con, tmp_path, monkeypatch):

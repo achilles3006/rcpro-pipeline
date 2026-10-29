@@ -103,12 +103,14 @@ def tables(con):
         evidence VARCHAR, extracted_at TIMESTAMP)""")
 
 
-def fetch(con, limit=None):
-    """Fetch deeds for companies not fetched before, newest first. Returns {found|no_deed|no_text|error: count}."""
+def fetch(con, limit=None, mailable=False):
+    """Fetch deeds for companies not fetched before, newest first; with `mailable`, only companies with an
+    outreach_email. Returns {found|no_deed|no_text|error: count}."""
     tables(con)
     rows = con.execute(f"""
         SELECT enterprise_number FROM leads
         WHERE legal_form_type = 'company' AND sales_angle <> 'no_outreach'
+          {"AND outreach_email IS NOT NULL" if mailable else ""}
           -- a deed is published days to weeks after the start: retry "no deed" weekly for 60 days
           -- (ponytail: fixed windows, measure the real publication lag when there is more data)
           AND enterprise_number NOT IN (SELECT d.enterprise_number FROM deeds d JOIN leads l USING (enterprise_number)
