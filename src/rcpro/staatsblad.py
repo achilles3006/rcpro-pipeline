@@ -189,15 +189,15 @@ def import_deeds(con, path):
 
 
 def apply(con):
-    """Add founders ("Name (role); ..."), activity_summary, deed_email, deed_website and deed_url (the founding
-    deed PDF) to `leads`, for companies only."""
+    """Add founders ("Name (role); ..."), activity_summary, deed_email, deed_website, deed_url (the founding
+    deed PDF) and linkedin (a LinkedIn search: the first founder, else the company name) to `leads`, for companies only."""
     tables(con)
     con.execute("CREATE OR REPLACE TEMP TABLE deed_contacts (enterprise_number VARCHAR, email VARCHAR, website VARCHAR)")
     found = [(ent, *contacts(text)) for ent, text in con.execute("SELECT enterprise_number, text FROM deeds WHERE text IS NOT NULL").fetchall()]
     if rows := [(ent, "; ".join(e) or None, "; ".join(s) or None) for ent, e, s in found if e or s]:
         con.executemany("INSERT INTO deed_contacts VALUES (?, ?, ?)", rows)
     cols = ", ".join(f"l.{c[0]}" for c in con.execute("DESCRIBE leads").fetchall()
-                     if c[0] not in ("founders", "activity_summary", "deed_email", "deed_website", "deed_url"))
+                     if c[0] not in ("founders", "activity_summary", "deed_email", "deed_website", "deed_url", "linkedin"))
     con.execute(f"""
         CREATE OR REPLACE TABLE leads AS
         SELECT {cols},
@@ -206,7 +206,11 @@ def apply(con):
                CASE WHEN l.legal_form_type = 'company' THEN x.activity_summary END AS activity_summary,
                CASE WHEN l.legal_form_type = 'company' THEN dc.email END AS deed_email,
                CASE WHEN l.legal_form_type = 'company' THEN dc.website END AS deed_website,
-               CASE WHEN l.legal_form_type = 'company' THEN d.pdf_url END AS deed_url
+               CASE WHEN l.legal_form_type = 'company' THEN d.pdf_url END AS deed_url,
+               -- LinkedIn forbids scraping: a search to open and check by hand, never a profile we matched
+               CASE WHEN l.legal_form_type = 'company' THEN 'https://www.linkedin.com/search/results/' ||
+                   CASE WHEN len(x.founders) > 0 THEN 'people/?keywords=' || url_encode(x.founders[1].name)
+                        ELSE 'companies/?keywords=' || url_encode(l.name) END END AS linkedin
         FROM leads l LEFT JOIN deed_extraction x ON x.enterprise_number = l.enterprise_number
         LEFT JOIN deed_contacts dc ON dc.enterprise_number = l.enterprise_number
         LEFT JOIN deeds d ON d.enterprise_number = l.enterprise_number

@@ -232,6 +232,9 @@ def test_deeds_round_trip(con, tmp_path):
     assert rows["0800.000.005"] == ("unknown", [], None, None)
     urls = dict(con.execute("SELECT enterprise_number, deed_url FROM leads WHERE segment = 'engineers'").fetchall())
     assert urls["0800.000.004"] == "https://x/a.pdf" and urls["0800.000.005"] is None
+    links = dict(con.execute("SELECT enterprise_number, linkedin FROM leads WHERE segment = 'engineers'").fetchall())
+    assert links["0800.000.004"].endswith("people/?keywords=Nicolas%20Hernandez%20Vazquez")
+    assert links["0800.000.005"] is None  # sole trader: never searched
     assert staatsblad.export_deeds(con, out) == 0  # already read
 
 

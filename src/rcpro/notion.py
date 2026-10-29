@@ -164,7 +164,7 @@ def write(kind, value, options):
 
 
 def sync(con, database=None):
-    """Create or update a page per lead. Returns {created, updated, unchanged, skipped columns}."""
+    """Create or update a page per lead, mailable companies first. Returns {created, updated, unchanged, skipped columns}."""
     database = database or os.environ["NOTION_LEADS_DB"]
     schema = _call("GET", f"/databases/{database}")["properties"]
     columns = [c[0] for c in con.execute("DESCRIBE leads").fetchall()]
@@ -183,7 +183,8 @@ def sync(con, database=None):
     counts = {"created": 0, "updated": 0, "unchanged": 0, "skipped columns": [c for c in columns if c not in kinds]}
     lists = {c[0] for c in con.execute("DESCRIBE leads").fetchall() if c[1].endswith("[]")}
     select = ", ".join(f"CAST({c} AS VARCHAR)" if c in lists else c for c in kinds)  # lists as leads.csv writes them
-    for row in con.execute(f"SELECT {select} FROM leads ORDER BY start_date DESC").fetchall():
+    first = "outreach_email IS NOT NULL DESC, " if "outreach_email" in columns else ""  # mailable rows first
+    for row in con.execute(f"SELECT {select} FROM leads ORDER BY {first}start_date DESC").fetchall():
         want = {c: norm(k, v) for (c, k), v in zip(kinds.items(), row)}
         page = pages.get(want[key])
         if page:
