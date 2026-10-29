@@ -114,8 +114,9 @@ def fetch(con, limit=None):
           AND enterprise_number NOT IN (SELECT d.enterprise_number FROM deeds d JOIN leads l USING (enterprise_number)
                                         WHERE d.pdf_url IS NOT NULL OR d.fetched_at > l.start_date + INTERVAL 60 DAY
                                            OR d.fetched_at > now() - INTERVAL 7 DAY)
-        -- engineers without code evidence first: the purpose clause is the best evidence for them
-        ORDER BY segment = 'engineers' AND (mandatory = 'unknown' OR evidence[1] LIKE 'llm:%') DESC,
+        -- mailable companies first (their deed is read before contact), then engineers without code evidence:
+        -- the purpose clause is the best evidence for them
+        ORDER BY outreach_email IS NOT NULL DESC, segment = 'engineers' AND (mandatory = 'unknown' OR evidence[1] LIKE 'llm:%') DESC,
                  start_date DESC, enterprise_number
         {"LIMIT " + str(int(limit)) if limit else ""}
     """).fetchall()
@@ -186,14 +187,15 @@ def import_deeds(con, path):
 
 
 def apply(con):
-    """Add founders ("Name (role); ..."), activity_summary, deed_email and deed_website to `leads`, for companies only."""
+    """Add founders ("Name (role); ..."), activity_summary, deed_email, deed_website and deed_url (the founding
+    deed PDF) to `leads`, for companies only."""
     tables(con)
     con.execute("CREATE OR REPLACE TEMP TABLE deed_contacts (enterprise_number VARCHAR, email VARCHAR, website VARCHAR)")
     found = [(ent, *contacts(text)) for ent, text in con.execute("SELECT enterprise_number, text FROM deeds WHERE text IS NOT NULL").fetchall()]
     if rows := [(ent, "; ".join(e) or None, "; ".join(s) or None) for ent, e, s in found if e or s]:
         con.executemany("INSERT INTO deed_contacts VALUES (?, ?, ?)", rows)
     cols = ", ".join(f"l.{c[0]}" for c in con.execute("DESCRIBE leads").fetchall()
-                     if c[0] not in ("founders", "activity_summary", "deed_email", "deed_website"))
+                     if c[0] not in ("founders", "activity_summary", "deed_email", "deed_website", "deed_url"))
     con.execute(f"""
         CREATE OR REPLACE TABLE leads AS
         SELECT {cols},
@@ -201,7 +203,9 @@ def apply(con):
                    p -> p.name || coalesce(' (' || p.role || ')', '')), '; '), '') END AS founders,
                CASE WHEN l.legal_form_type = 'company' THEN x.activity_summary END AS activity_summary,
                CASE WHEN l.legal_form_type = 'company' THEN dc.email END AS deed_email,
-               CASE WHEN l.legal_form_type = 'company' THEN dc.website END AS deed_website
+               CASE WHEN l.legal_form_type = 'company' THEN dc.website END AS deed_website,
+               CASE WHEN l.legal_form_type = 'company' THEN d.pdf_url END AS deed_url
         FROM leads l LEFT JOIN deed_extraction x ON x.enterprise_number = l.enterprise_number
         LEFT JOIN deed_contacts dc ON dc.enterprise_number = l.enterprise_number
+        LEFT JOIN deeds d ON d.enterprise_number = l.enterprise_number
     """)

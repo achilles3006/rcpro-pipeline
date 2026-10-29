@@ -117,8 +117,9 @@ def pick(addresses, suppressed=frozenset(), no_mx=frozenset()):
 
 
 def apply(con):
-    """Add email_mx_ok (an address whose domain takes mail; null = not checked) and outreach_email (the address
-    the gate would use: legal person, impersonal, domain not without MX, not opted out) to `leads`."""
+    """Add email_mx_ok (an address whose domain takes mail; null = not checked), outreach_email (the address
+    the gate would use: legal person, impersonal, domain not without MX, not opted out) and personal_email
+    (named addresses of those same companies: informational, never mailed) to `leads`."""
     _tables(con)
     _mx_table(con)
     mx = dict(con.execute("SELECT domain, has_mx FROM mx_check WHERE has_mx IS NOT NULL").fetchall())
@@ -132,12 +133,16 @@ def apply(con):
             FROM leads""", sorted(LEGAL_PERSON_FORMS)).fetchall():
         checked = [mx[d] for v in addresses for d in _domains(v) if d in mx]
         hit = ok_form and ent not in blocked and pick(addresses, suppressed, no_mx)
-        rows.append((ent, any(checked) if checked else None, hit[0] if hit else None))
-    con.execute("CREATE OR REPLACE TEMP TABLE mail_check (enterprise_number VARCHAR, email_mx_ok BOOLEAN, outreach_email VARCHAR)")
+        personal = sorted({e.strip().lower() for v in addresses for e in (v or "").split(";") if "@" in e and not impersonal(e)})
+        rows.append((ent, any(checked) if checked else None, hit[0] if hit else None,
+                     "; ".join(personal) if ok_form and personal else None))
+    con.execute("""CREATE OR REPLACE TEMP TABLE mail_check (enterprise_number VARCHAR, email_mx_ok BOOLEAN,
+                   outreach_email VARCHAR, personal_email VARCHAR)""")
     if rows:
-        con.executemany("INSERT INTO mail_check VALUES (?, ?, ?)", rows)
-    cols = ", ".join(f"l.{c[0]}" for c in con.execute("DESCRIBE leads").fetchall() if c[0] not in ("email_mx_ok", "outreach_email"))
-    con.execute(f"""CREATE OR REPLACE TABLE leads AS SELECT {cols}, m.email_mx_ok, m.outreach_email
+        con.executemany("INSERT INTO mail_check VALUES (?, ?, ?, ?)", rows)
+    added = ("email_mx_ok", "outreach_email", "personal_email")
+    cols = ", ".join(f"l.{c[0]}" for c in con.execute("DESCRIBE leads").fetchall() if c[0] not in added)
+    con.execute(f"""CREATE OR REPLACE TABLE leads AS SELECT {cols}, m.email_mx_ok, m.outreach_email, m.personal_email
                     FROM leads l LEFT JOIN mail_check m USING (enterprise_number)""")
 
 

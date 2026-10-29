@@ -230,6 +230,8 @@ def test_deeds_round_trip(con, tmp_path):
     assert rows["0800.000.004"] == ("likely", ["deed: études de stabilité ... pour bâtiments"],
                                     "Nicolas Hernandez Vazquez (founder)", "Stability studies for buildings")
     assert rows["0800.000.005"] == ("unknown", [], None, None)
+    urls = dict(con.execute("SELECT enterprise_number, deed_url FROM leads WHERE segment = 'engineers'").fetchall())
+    assert urls["0800.000.004"] == "https://x/a.pdf" and urls["0800.000.005"] is None
     assert staatsblad.export_deeds(con, out) == 0  # already read
 
 
@@ -250,6 +252,7 @@ def test_unknown_engineers_get_their_deed_first(con, monkeypatch):
                 "('0800.000.004', '2025', '71121', 'MAIN')")
     leads.build_leads(con, "2025-10-01")
     classify.classify(con)
+    websites.apply(con), staatsblad.apply(con), outreach.apply(con)  # as `refresh` does
     asked = []
     monkeypatch.setattr(staatsblad, "fetch_one", lambda ent: asked.append(ent) or (None, None, None))
     staatsblad.fetch(con)
@@ -259,6 +262,7 @@ def test_unknown_engineers_get_their_deed_first(con, monkeypatch):
 def test_no_deed_is_retried_only_while_recent(con, monkeypatch):
     leads.build_leads(con, "2025-10-01")
     classify.classify(con)
+    websites.apply(con), staatsblad.apply(con), outreach.apply(con)  # as `refresh` does
     staatsblad.tables(con)
     con.execute("""INSERT INTO deeds VALUES ('0800.000.001', NULL, NULL, NULL, '2026-01-10'),
         ('0800.000.006', NULL, NULL, NULL, '2026-06-01')""")  # started 5 and 8 January 2026

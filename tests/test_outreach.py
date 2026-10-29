@@ -67,6 +67,9 @@ def test_mx_columns_and_gate():
     assert got["6"] == (True, "hallo@f.be")
     assert got["5"] == (None, "contact@ateliere.be")  # not checked yet
     assert got["3"] == (None, None)  # personal address
+    personal = dict(con.execute("SELECT enterprise_number, personal_email FROM leads").fetchall())
+    assert personal["3"] == "jan@studioc.be" and personal["6"] == "f@gmail.com; jan@f.be"  # listed apart, never mailed
+    assert personal["5"] is None and personal["4"] is None  # only impersonal / no legal personality
     assert "1" not in [c["enterprise_number"] for c in outreach.candidates(con)]
 
 

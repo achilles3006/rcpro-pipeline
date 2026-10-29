@@ -18,7 +18,7 @@ from datetime import date
 API = "https://api.notion.com/v1"
 VERSION = "2022-06-28"
 DELAY = 0.35
-KINDS = ("title", "rich_text", "number", "checkbox", "select", "date")
+KINDS = ("title", "rich_text", "number", "checkbox", "select", "date", "url")
 _last = 0.0
 
 

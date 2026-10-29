@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 COLUMNS = ["start_date", "segment", "sales_angle", "mandatory", "legal_form_type", "juridical_form_label", "name",
-           "postcode", "municipality", "email", "phone", "website", "site", "site_level", "site_email", "site_phone", "deed_email", "deed_website", "outreach_email", "founders", "activity_summary", "evidence", "needs_review",
+           "postcode", "municipality", "email", "phone", "website", "site", "site_level", "site_email", "site_phone", "deed_email", "deed_website", "deed_url", "outreach_email", "founders", "activity_summary", "evidence", "needs_review",
            "dm_allowed_from_kbo", "enterprise_number"]
 
 # Display only: the table keeps its keys, the page shows clear English labels
@@ -19,7 +19,7 @@ HEADERS = {
     "name": "Name", "postcode": "Postcode", "municipality": "Municipality", "email": "Email",
     "phone": "Phone", "website": "Website", "site": "Website found", "site_level": "Match",
     "site_email": "Email on website", "site_phone": "Phone on website",
-    "deed_email": "Email (deed)", "deed_website": "Website (deed)", "outreach_email": "Email for outreach",
+    "deed_email": "Email (deed)", "deed_website": "Website (deed)", "deed_url": "Deed", "outreach_email": "Email for outreach",
     "founders": "Founders (deed)", "activity_summary": "Activity (deed)", "evidence": "Evidence", "needs_review": "Needs review",
     "dm_allowed_from_kbo": "Contact allowed (KBO)", "enterprise_number": "Enterprise number",
 }
@@ -125,6 +125,7 @@ function cell(c, v) {
   if (v == null) return "<td></td>";
   if (c === "enterprise_number")
     return `<td><a target="_blank" href="https://kbopub.economie.fgov.be/kbopub/zoeknummerform.html?nummer=${esc(v.replace(/\\./g, ""))}&actionLu=Zoek">${esc(v)}</a></td>`;
+  if (c === "deed_url") return `<td><a target="_blank" href="${esc(v)}">PDF</a></td>`;
   if (c === "website" || c === "site")
     return "<td>" + v.split("; ").map(w => `<a target="_blank" href="${esc(/^https?:/.test(w) ? w : "https://" + w)}">${esc(w)}</a>`).join("<br>") + "</td>";
   if (c === "email" || c === "site_email" || c === "deed_email" || c === "outreach_email") return "<td>" + v.split("; ").map(e => (NO_MX.has(e.split("@")[1]?.trim().toLowerCase())

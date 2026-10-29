@@ -95,8 +95,10 @@ Each step can also run on its own; see `python -m rcpro --help` and section 9.
 | `mandatory`, `evidence`, `legal_basis`, `needs_review` | is the cover mandatory, on what evidence, which law, and whether a person should check |
 | `site_level`, `site`, `site_email`, `site_phone` | website found by the pipeline and the contact data on it; kept apart from KBO because the legal basis may differ |
 | `founders`, `activity_summary` | from the founding deed (companies only); in `leads.html` each founder links to a LinkedIn people search, to check by hand |
+| `deed_url` | link to the founding deed (PDF) in the Belgian Official Gazette; empty = no deed fetched yet |
 | `email_mx_ok` | at least one e-mail domain of the company takes mail (MX record); empty = not checked. Says nothing about the mailbox itself |
 | `outreach_email` | the address the outreach gate would use (legal person, impersonal, domain with MX, not opted out); filter on "is not empty" in Notion |
+| `personal_email` | named addresses (jan@...) of those same companies; informational only, **never mail them** |
 
 Segments and how to approach each one: `docs/segments.md`.
 
