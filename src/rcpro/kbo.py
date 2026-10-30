@@ -8,7 +8,12 @@ An update has <table>_delete.csv (one key column) and <table>_insert.csv.
 Both carry meta.csv with ExtractNumber. Input is the .zip or an unpacked folder.
 """
 
+import http.cookiejar
+import os
+import re
 import tempfile
+import urllib.parse
+import urllib.request
 import warnings
 import zipfile
 from contextlib import contextmanager
@@ -17,6 +22,8 @@ from pathlib import Path
 import duckdb
 
 # Only these files are loaded; anything else in the folder is ignored.
+PORTAL = "https://kbopub.economie.fgov.be/kbo-open-data/"
+
 KBO_TABLES = ("meta", "code", "enterprise", "establishment", "denomination", "address", "contact", "activity", "branch")
 
 
@@ -101,3 +108,27 @@ def apply_updates(con, paths):
         with _unpacked(p) as folder:
             return _extract_number(folder)
     return [apply_update(con, p) for p in sorted(paths, key=number)]
+
+
+def download(con, dest="data"):
+    """Log in to the KBO Open Data portal (KBO_USER, KBO_PASSWORD) and download the update zips
+    newer than the last applied extract. Returns their paths, oldest first."""
+    # ponytail: form login on the web portal; switch to the FOD Economie FTP server once access is granted
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    opener.open(PORTAL + "login", timeout=60).read()
+    login = urllib.parse.urlencode({"j_username": os.environ["KBO_USER"], "j_password": os.environ["KBO_PASSWORD"]})
+    opener.open(PORTAL + "static/j_spring_security_check", login.encode(), timeout=60).read()
+    page = opener.open(PORTAL + "affiliation/xml/?files", timeout=60).read().decode()
+    names = sorted(set(re.findall(r"files/(KboOpenData_(\d+)_[\d_]+_Update\.zip)", page)), key=lambda n: int(n[1]))
+    if not names:
+        raise RuntimeError("No update files on the KBO portal: check KBO_USER and KBO_PASSWORD.")
+    last = last_applied(con) or 0
+    paths = []
+    for name, number in names:
+        if int(number) > last:
+            path = Path(dest) / name
+            if not path.exists():
+                with opener.open(PORTAL + "affiliation/xml/files/" + name, timeout=600) as r:
+                    path.write_bytes(r.read())
+            paths.append(path)
+    return paths

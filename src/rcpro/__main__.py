@@ -6,6 +6,7 @@ Everything in one go (load, leads, websites, Staatsblad, the Claude steps, then 
 Single steps:
     python -m rcpro full data/KboOpenData_0517_2026_10_19_Full.zip
     python -m rcpro update data/KboOpenData_0518_*_Update.zip
+    python -m rcpro kbo-download                  # newer updates from the portal (KBO_USER, KBO_PASSWORD), then applied
     python -m rcpro leads --since 2025-10-01 [--csv data/leads.csv]
     python -m rcpro websites [--limit 200]        # search company websites, newest first, each once
     python -m rcpro staatsblad [--limit 20] [--mailable]  # founding deeds from the Staatsblad, newest first, each once (1 request / 5 s)
@@ -111,6 +112,7 @@ def main():
     rp.add_argument("--no-claude", action="store_true", help="skip the claude -p steps")
     sub.add_parser("full").add_argument("path")
     sub.add_parser("update").add_argument("paths", nargs="+")
+    sub.add_parser("kbo-download")
     lp = sub.add_parser("leads")
     lp.add_argument("--since", default=leads.FIRST_START, help=f"YYYY-MM-DD, default {leads.FIRST_START}")
     lp.add_argument("--csv", help="also write the leads table to this CSV")
@@ -146,6 +148,12 @@ def main():
     elif args.cmd == "update":
         kbo.apply_updates(con, args.paths)
         print(f"Last applied extract: {kbo.last_applied(con)}")
+    elif args.cmd == "kbo-download":
+        paths = kbo.download(con)
+        kbo.apply_updates(con, paths)
+        if paths:
+            refresh(con, leads.FIRST_START)  # new companies into leads before mx and staatsblad
+        print(f"Downloaded {len(paths)} update(s); last applied extract: {kbo.last_applied(con)}")
     elif args.cmd == "leads":
         refresh(con, args.since, args.csv)
         for row in leads.summary(con):
