@@ -146,7 +146,7 @@ def crawl(domain):
     """Homepage plus up to six contact or legal pages it links to. None if there is no site."""
     try:
         socket.getaddrinfo(domain, 443)
-    except OSError:
+    except (OSError, UnicodeError):  # UnicodeError: a label over 63 chars or empty
         return None
     for base in (f"https://{domain}/", f"https://www.{domain}/", f"http://{domain}/"):
         try:

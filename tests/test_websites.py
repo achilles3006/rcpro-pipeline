@@ -61,3 +61,8 @@ def test_check_answer_trusts_only_what_the_pages_show(monkeypatch):
     # e-mail only, on a cited page that shows the enterprise number
     monkeypatch.setattr(websites, "_get", lambda url, html_only=True: (url, "TekniSafe 1041658155 ts@gmail.com" + " x" * 50))
     assert websites.check_answer(company, None, "ts@gmail.com", "https://dir/x") == ("verified", None, {"ts@gmail.com"}, set())
+
+
+def test_invalid_domain_is_no_site():
+    assert websites.crawl("a" * 64 + ".be") is None
+    assert websites.crawl("foo..be") is None
