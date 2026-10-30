@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 COLUMNS = ["start_date", "segment", "sales_angle", "mandatory", "legal_form_type", "juridical_form_label", "name",
-           "postcode", "municipality", "email", "phone", "website", "site", "site_level", "site_email", "site_phone", "deed_email", "deed_website", "deed_url", "outreach_email", "founders", "activity_summary", "evidence", "needs_review",
+           "postcode", "municipality", "email", "phone", "website", "site_self_found", "site_level", "site_email", "site_phone", "deed_email", "deed_website", "deed_url", "outreach_email", "founders", "activity_summary", "evidence", "needs_review",
            "dm_allowed_from_kbo", "enterprise_number"]
 
 # Display only: the table keeps its keys, the page shows clear English labels
@@ -17,7 +17,7 @@ HEADERS = {
     "start_date": "Start date", "segment": "Segment", "sales_angle": "Sales story",
     "mandatory": "Insurance mandatory", "legal_form_type": "Type", "juridical_form_label": "Legal form",
     "name": "Name", "postcode": "Postcode", "municipality": "Municipality", "email": "Email",
-    "phone": "Phone", "website": "Website", "site": "Website found", "site_level": "Match",
+    "phone": "Phone", "website": "Website", "site_self_found": "Website (self-found)", "site_level": "Match",
     "site_email": "Email on website", "site_phone": "Phone on website",
     "deed_email": "Email (deed)", "deed_website": "Website (deed)", "deed_url": "Deed", "outreach_email": "Email for outreach",
     "founders": "Founders (deed)", "activity_summary": "Activity (deed)", "evidence": "Evidence", "needs_review": "Needs review",
@@ -126,7 +126,7 @@ function cell(c, v) {
   if (c === "enterprise_number")
     return `<td><a target="_blank" href="https://kbopub.economie.fgov.be/kbopub/zoeknummerform.html?nummer=${esc(v.replace(/\\./g, ""))}&actionLu=Zoek">${esc(v)}</a></td>`;
   if (c === "deed_url") return `<td><a target="_blank" href="${esc(v)}">PDF</a></td>`;
-  if (c === "website" || c === "site")
+  if (c === "website" || c === "site_self_found")
     return "<td>" + v.split("; ").map(w => `<a target="_blank" href="${esc(/^https?:/.test(w) ? w : "https://" + w)}">${esc(w)}</a>`).join("<br>") + "</td>";
   if (c === "email" || c === "site_email" || c === "deed_email" || c === "outreach_email") return "<td>" + v.split("; ").map(e => (NO_MX.has(e.split("@")[1]?.trim().toLowerCase())
     ? `<a class="nomx" title="Domain takes no mail (no MX record)" href="mailto:${esc(e)}">${esc(e)}</a>`
@@ -146,7 +146,7 @@ function render() {
   const rows = DATA.rows.filter(r =>
     FILTERS.every(f => !val(f) || r[ix[f]] === val(f)) &&
     (!dm || r[ix.dm_allowed_from_kbo]) &&
-    (!contact || ["email", "phone", "website", "site", "site_email", "site_phone", "deed_email", "deed_website"].some(c => r[ix[c]])) &&
+    (!contact || ["email", "phone", "website", "site_self_found", "site_email", "site_phone", "deed_email", "deed_website"].some(c => r[ix[c]])) &&
     (!q || ["name", "postcode", "municipality", "enterprise_number"].some(f => (r[ix[f]] || "").toLowerCase().includes(q))));
   rows.sort((a, b) => {
     const x = a[sortCol] ?? "", y = b[sortCol] ?? "";

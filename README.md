@@ -95,7 +95,7 @@ Each step can also run on its own; see `python -m rcpro --help` and section 9.
 | `has_email`, `has_phone`, `has_website`, `email`, `phone`, `website` | contact data from KBO |
 | `dm_allowed_from_kbo` | false for every sole trader: **do not contact** |
 | `mandatory`, `evidence`, `legal_basis`, `needs_review` | is the cover mandatory, on what evidence, which law, and whether a person should check |
-| `site_level`, `site`, `site_email`, `site_phone` | website found by the pipeline and the contact data on it; kept apart from KBO because the legal basis may differ |
+| `site_level`, `site_self_found`, `site_email`, `site_phone` | website found by the pipeline and the contact data on it; kept apart from KBO because the legal basis may differ |
 | `founders`, `activity_summary` | from the founding deed (companies only); in `leads.html` each founder links to a LinkedIn people search, to check by hand |
 | `linkedin` | LinkedIn search for the first founder (else the company name), to check by hand; never use it for outreach to the person |
 | `deed_url` | link to the founding deed (PDF) in the Belgian Official Gazette; empty = no deed fetched yet |

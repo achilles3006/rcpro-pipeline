@@ -182,7 +182,7 @@ def test_websites_apply_is_repeatable_and_skips_none(con):
         ('0800.000.006', 'none', NULL, NULL, NULL, NULL, now())""")
     websites.apply(con)
     websites.apply(con)  # twice: no duplicate columns
-    rows = dict(con.execute("SELECT enterprise_number, site FROM leads").fetchall())
+    rows = dict(con.execute("SELECT enterprise_number, site_self_found FROM leads").fetchall())
     assert rows == {"0800.000.001": "studio-a.be", "0800.000.002": None, "0800.000.006": None}
 
 
@@ -298,6 +298,6 @@ def test_web_search_round_trip(con, tmp_path, monkeypatch):
     answers.write_text('Here you go:\n{"enterprise_number": "0800.000.006", "website": "found.be", "email": null, "source": null}\n')
     assert websites.import_search(con, answers) == {"probable": 1}
     websites.apply(con)
-    assert con.execute("SELECT site, site_email FROM leads WHERE enterprise_number = '0800.000.006'").fetchone() == (
+    assert con.execute("SELECT site_self_found, site_email FROM leads WHERE enterprise_number = '0800.000.006'").fetchone() == (
         "found.be", "info@found.be")
     assert websites.export_search(con, out) == 1  # 0800.000.006 searched once, 0800.000.001 still to do

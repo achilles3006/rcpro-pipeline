@@ -5,7 +5,7 @@ set -e
 cd "${0:A:h}/.."
 source ~/.config/rcpro.env  # NOTION_*, SSL_CERT_FILE; never in git
 source ~/.venvs/rcpro-pipeline/bin/activate
-export PATH="$HOME/.local/bin:$PATH"  # claude
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"  # claude, pdftotext
 echo "== $(date '+%F %T')"
 python -m rcpro mx
 python -m rcpro staatsblad --mailable --limit 200

@@ -211,13 +211,13 @@ def search(con, limit=None, workers=12):
 
 
 def apply(con):
-    """Add site_level, site, site_email and site_phone to `leads` (verified and probable only)."""
+    """Add site_level, site_self_found, site_email and site_phone to `leads` (verified and probable only)."""
     _table(con)
-    site_cols = ("site_level", "site", "site_email", "site_phone")
+    site_cols = ("site_level", "site_self_found", "site_email", "site_phone")
     cols = ", ".join(f"l.{c[0]}" for c in con.execute("DESCRIBE leads").fetchall() if c[0] not in site_cols)
     con.execute(f"""
         CREATE OR REPLACE TABLE leads AS
-        SELECT {cols}, w.level AS site_level, w.domain AS site, w.emails AS site_email, w.phones AS site_phone
+        SELECT {cols}, w.level AS site_level, w.domain AS site_self_found, w.emails AS site_email, w.phones AS site_phone
         FROM leads l
         LEFT JOIN website_matches w ON w.enterprise_number = l.enterprise_number AND w.level IN ('verified', 'probable')
     """)
@@ -250,7 +250,7 @@ def export_search(con, path, limit=None):
     rows = con.execute(f"""
         SELECT enterprise_number, name, juridical_form_label, segment, postcode, municipality FROM leads
         WHERE legal_form_type = 'company' AND sales_angle <> 'no_outreach'
-          AND email IS NULL AND website IS NULL AND site IS NULL
+          AND email IS NULL AND website IS NULL AND site_self_found IS NULL
           -- nothing found: search again after 30 days, new companies often get a site later
           AND enterprise_number NOT IN (SELECT enterprise_number FROM web_search WHERE checked_at > now() - INTERVAL 30 DAY)
         ORDER BY start_date DESC, enterprise_number
