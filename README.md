@@ -44,7 +44,7 @@ The first run loads the full extract, builds the leads, and enriches the newest 
 
 ## 4. Daily routine
 
-**Nightly, automatic.** `scripts/nightly.sh` runs every night at 02:00 through launchd (`scripts/be.omata.rcpro.nightly.plist`, copied to `~/Library/LaunchAgents/`): MX check, founding deeds of mailable companies only (`staatsblad --mailable --limit 200`), the Claude deed extraction, `leads.csv` and the Notion sync. Output: `data/nightly.log`. It needs `~/.config/rcpro.env` (Notion OAuth tokens, `SSL_CERT_FILE`). Keep the project outside `~/Desktop` and `~/Documents`: macOS does not let launchd jobs read files there. Stop it with `launchctl bootout gui/$(id -u)/be.omata.rcpro.nightly`.
+**Nightly, automatic.** `scripts/nightly.sh` runs every night at 02:00 through launchd (`scripts/be.omata.rcpro.nightly.plist`, copied to `~/Library/LaunchAgents/`): new KBO updates from the portal (`kbo-download`, needs `KBO_USER`/`KBO_PASSWORD`), websites (`--limit 500`), MX check, founding deeds of mailable companies only (`staatsblad --mailable --limit 200`), the Claude deed extraction, `leads.csv` and the Notion sync. Output: `data/nightly.log`. It needs `~/.config/rcpro.env` (Notion OAuth tokens, `SSL_CERT_FILE`). Keep the project outside `~/Desktop` and `~/Documents`: macOS does not let launchd jobs read files there. Stop it with `launchctl bootout gui/$(id -u)/be.omata.rcpro.nightly`.
 
 **By hand, for new KBO data.** Download the new update zip(s) and run:
 

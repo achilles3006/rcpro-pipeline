@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Nightly: new KBO updates, founding deeds of mailable companies, Claude extraction, leads.csv, Notion.
+# Nightly: new KBO updates, websites, founding deeds of mailable companies, Claude extraction, leads.csv, Notion.
 # Started by launchd (scripts/be.omata.rcpro.nightly.plist); output goes to data/nightly.log.
 set -e
 cd "${0:A:h}/.."
@@ -8,6 +8,7 @@ source ~/.venvs/rcpro-pipeline/bin/activate
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"  # claude, pdftotext
 echo "== $(date '+%F %T')"
 python -m rcpro kbo-download
+python -m rcpro websites --limit 500  # no Claude; site e-mails then go through mx
 python -m rcpro mx
 python -m rcpro staatsblad --mailable --limit 200
 python -m rcpro export-deeds data/deeds.jsonl
