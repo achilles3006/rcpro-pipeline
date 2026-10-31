@@ -204,6 +204,14 @@ def _table(con):
         domain VARCHAR, source VARCHAR, emails VARCHAR, phones VARCHAR, checked_at TIMESTAMP)""")
 
 
+def online():
+    try:
+        socket.create_connection(("1.1.1.1", 53), timeout=5).close()
+        return True
+    except OSError:
+        return False
+
+
 def search(con, limit=None, workers=12):
     """Search companies in `leads` not searched before, newest first. Returns {level: count}."""
     _table(con)
@@ -217,6 +225,9 @@ def search(con, limit=None, workers=12):
             except Exception as e:  # one odd site must not stop the run; not stored, so tried again next run
                 print(f"{futures[f]}: {e!r}")
                 continue
+            if level == "none" and not online():  # asleep or offline: every lookup fails, nothing is "no site"
+                ex.shutdown(cancel_futures=True)
+                raise RuntimeError("no network; stopped without storing the last answer")
             con.execute("INSERT OR REPLACE INTO website_matches VALUES (?, ?, ?, ?, ?, ?, now())",
                         [futures[f], level, domain, source, "; ".join(sorted(found_emails)) or None,
                          "; ".join(sorted(found_phones)) or None])

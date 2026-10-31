@@ -72,4 +72,17 @@ def test_one_failing_company_does_not_stop_the_search(monkeypatch):
     import duckdb
     monkeypatch.setattr(websites, "_companies", lambda con, where, limit=None: [{"enterprise_number": "1"}, {"enterprise_number": "2"}])
     monkeypatch.setattr(websites, "search_one", lambda c: 1 / 0 if c["enterprise_number"] == "1" else ("none", None, None, set(), set()))
+    monkeypatch.setattr(websites, "online", lambda: True)
     assert websites.search(duckdb.connect()) == {"none": 1}
+
+
+def test_offline_stops_instead_of_storing_none(monkeypatch):
+    import duckdb
+    import pytest
+    con = duckdb.connect()
+    monkeypatch.setattr(websites, "_companies", lambda con, where, limit=None: [{"enterprise_number": "1"}])
+    monkeypatch.setattr(websites, "search_one", lambda c: ("none", None, None, set(), set()))
+    monkeypatch.setattr(websites, "online", lambda: False)
+    with pytest.raises(RuntimeError):
+        websites.search(con)
+    assert con.execute("SELECT count(*) FROM website_matches").fetchone() == (0,)
