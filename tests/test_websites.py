@@ -66,3 +66,10 @@ def test_check_answer_trusts_only_what_the_pages_show(monkeypatch):
 def test_invalid_domain_is_no_site():
     assert websites.crawl("a" * 64 + ".be") is None
     assert websites.crawl("foo..be") is None
+
+
+def test_one_failing_company_does_not_stop_the_search(monkeypatch):
+    import duckdb
+    monkeypatch.setattr(websites, "_companies", lambda con, where, limit=None: [{"enterprise_number": "1"}, {"enterprise_number": "2"}])
+    monkeypatch.setattr(websites, "search_one", lambda c: 1 / 0 if c["enterprise_number"] == "1" else ("none", None, None, set(), set()))
+    assert websites.search(duckdb.connect()) == {"none": 1}

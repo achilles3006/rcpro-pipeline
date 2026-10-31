@@ -20,10 +20,12 @@ number, or name plus municipality) on the site and on the page Claude cites. Onl
 that pass go into `website_matches` (source web_search); Claude's word alone is never used.
 """
 
+import codecs
 import http.client
 import json
 import re
 import socket
+import time
 import ssl
 import unicodedata
 import urllib.request
@@ -139,7 +141,15 @@ def _get(url, html_only=True):
         if html_only and "html" not in r.headers.get("Content-Type", ""):
             return None, None
         charset = r.headers.get_content_charset() or "utf-8"
-        return r.url, r.read(2_000_000).decode(charset, "ignore")
+        try:
+            codecs.lookup(charset)
+        except LookupError:  # a bogus header such as "utf-8,text/html"
+            charset = "utf-8"
+        # the 12 s timeout is per socket read: a site that trickles bytes would hold a worker forever
+        body, deadline = b"", time.monotonic() + 30
+        while len(body) < 2_000_000 and time.monotonic() < deadline and (chunk := r.read1(65536)):
+            body += chunk
+        return r.url, body[:2_000_000].decode(charset, "ignore")
 
 
 def crawl(domain):
@@ -202,7 +212,11 @@ def search(con, limit=None, workers=12):
     with ThreadPoolExecutor(workers) as ex:
         futures = {ex.submit(search_one, c): c["enterprise_number"] for c in rows}
         for f in as_completed(futures):
-            level, domain, source, found_emails, found_phones = f.result()
+            try:
+                level, domain, source, found_emails, found_phones = f.result()
+            except Exception as e:  # one odd site must not stop the run; not stored, so tried again next run
+                print(f"{futures[f]}: {e!r}")
+                continue
             con.execute("INSERT OR REPLACE INTO website_matches VALUES (?, ?, ?, ?, ?, ?, now())",
                         [futures[f], level, domain, source, "; ".join(sorted(found_emails)) or None,
                          "; ".join(sorted(found_phones)) or None])
