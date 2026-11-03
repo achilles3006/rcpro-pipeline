@@ -49,6 +49,11 @@ def _call(method, path, body=None):
             if e.code not in (429, 502, 503) or attempt == 4:
                 raise RuntimeError(f"Notion {method} {path}: {e.code} {e.read().decode()[:300]}") from e
             time.sleep(float(e.headers.get("Retry-After") or 2 ** attempt))
+        except OSError:  # timeout or dropped connection
+            # ponytail: a create that timed out after Notion stored it is made twice; dedupe by hand if seen
+            if attempt == 4:
+                raise
+            time.sleep(2 ** attempt)
 
 
 ENV_FILE = Path(os.environ.get("RCPRO_ENV", "~/.config/rcpro.env")).expanduser()

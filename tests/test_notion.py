@@ -88,3 +88,21 @@ def test_expired_oauth_token_is_refreshed_and_saved(tmp_path, monkeypatch):
     assert seen[1][1].startswith("Basic ") and seen[2][1] == "Bearer new"
     assert env.read_text() == "export NOTION_TOKEN=new\nexport NOTION_LEADS_DB=db1\nexport NOTION_REFRESH_TOKEN=r2\n"
     assert env.stat().st_mode & 0o777 == 0o600
+
+
+def test_call_retries_a_timeout(monkeypatch):
+    import io
+
+    monkeypatch.setattr(notion, "DELAY", 0)
+    monkeypatch.setattr(notion.time, "sleep", lambda s: None)
+    monkeypatch.setenv("NOTION_TOKEN", "t")
+    tries = []
+
+    def urlopen(req, timeout):
+        tries.append(1)
+        if len(tries) == 1:
+            raise TimeoutError("The read operation timed out")
+        return io.BytesIO(b'{"ok": true}')
+
+    monkeypatch.setattr(notion.urllib.request, "urlopen", urlopen)
+    assert notion._call("GET", "/users/me") == {"ok": True} and len(tries) == 2
