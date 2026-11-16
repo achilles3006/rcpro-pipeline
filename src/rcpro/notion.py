@@ -168,8 +168,13 @@ def write(kind, value, options):
     return {kind: value}
 
 
-def sync(con, database=None):
-    """Create or update a page per lead, mailable companies first. Returns {created, updated, unchanged, skipped columns}."""
+def sync(con, database=None, full=False):
+    """Create or update a page per lead, mailable companies first. Returns {created, updated, unchanged, skipped columns}.
+
+    What Notion holds is remembered in the table notion_pages, so a run sends only new and changed
+    leads. Notion is read in full only on the first run or with full=True (`notion --full`), e.g.
+    after pages were deleted or columns edited by hand in Notion.
+    """
     database = database or os.environ["NOTION_LEADS_DB"]
     schema = _call("GET", f"/databases/{database}")["properties"]
     columns = [c[0] for c in con.execute("DESCRIBE leads").fetchall()]
@@ -177,13 +182,22 @@ def sync(con, database=None):
     key = next(c for c, k in kinds.items() if k == "title")
     options = {c: {o["name"]: o["id"] for o in schema[c]["select"]["options"]} for c, k in kinds.items() if k == "select"}
 
-    pages, cursor = {}, None
-    while True:
-        r = _call("POST", f"/databases/{database}/query", {"page_size": 100, **({"start_cursor": cursor} if cursor else {})})
-        pages.update({read(p["properties"][key]): p for p in r["results"]})
-        if not r["has_more"]:
-            break
-        cursor = r["next_cursor"]
+    con.execute("CREATE TABLE IF NOT EXISTS notion_pages (enterprise_number VARCHAR PRIMARY KEY, page_id VARCHAR, data VARCHAR)")
+    if full:
+        con.execute("DELETE FROM notion_pages")
+    known = {k: (pid, json.loads(d)) for k, pid, d in con.execute("SELECT * FROM notion_pages").fetchall()}
+    if not known:  # first run or --full: read what Notion holds
+        cursor = None
+        while True:
+            r = _call("POST", f"/databases/{database}/query", {"page_size": 100, **({"start_cursor": cursor} if cursor else {})})
+            for p in r["results"]:
+                have = {c: norm(k, read(p["properties"][c])) for c, k in kinds.items() if c in p["properties"]}
+                known[have[key]] = (p["id"], have)
+            if not r["has_more"]:
+                break
+            cursor = r["next_cursor"]
+        con.executemany("INSERT INTO notion_pages VALUES (?, ?, ?)",
+                        [[k, pid, json.dumps(have)] for k, (pid, have) in known.items()])
 
     counts = {"created": 0, "updated": 0, "unchanged": 0, "skipped columns": [c for c in columns if c not in kinds]}
     lists = {c[0] for c in con.execute("DESCRIBE leads").fetchall() if c[1].endswith("[]")}
@@ -191,17 +205,18 @@ def sync(con, database=None):
     first = "outreach_email IS NOT NULL DESC, " if "outreach_email" in columns else ""  # mailable rows first
     for row in con.execute(f"SELECT {select} FROM leads ORDER BY {first}start_date DESC").fetchall():
         want = {c: norm(k, v) for (c, k), v in zip(kinds.items(), row)}
-        page = pages.get(want[key])
-        if page:
-            changed = {c: v for c, v in want.items() if v != norm(kinds[c], read(page["properties"][c]))}
+        if want[key] in known:
+            page_id, have = known[want[key]]
+            changed = {c: v for c, v in want.items() if v != have.get(c)}
             if not changed:
                 counts["unchanged"] += 1
                 continue
-            _call("PATCH", f"/pages/{page['id']}",
+            _call("PATCH", f"/pages/{page_id}",
                   {"properties": {c: write(kinds[c], v, options.get(c, {})) for c, v in changed.items()}})
             counts["updated"] += 1
         else:
-            _call("POST", "/pages", {"parent": {"database_id": database},
-                                     "properties": {c: write(kinds[c], v, options.get(c, {})) for c, v in want.items()}})
+            page_id = _call("POST", "/pages", {"parent": {"database_id": database},
+                                               "properties": {c: write(kinds[c], v, options.get(c, {})) for c, v in want.items()}})["id"]
             counts["created"] += 1
+        con.execute("INSERT OR REPLACE INTO notion_pages VALUES (?, ?, ?)", [want[key], page_id, json.dumps(want)])
     return counts

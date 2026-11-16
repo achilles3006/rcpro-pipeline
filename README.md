@@ -134,14 +134,14 @@ python -m rcpro leads --since 2025-10-01 --csv data/leads.csv
 python -m rcpro websites --limit 200
 python -m rcpro staatsblad --limit 200
 python -m rcpro view                            # writes and opens data/leads.html
-python -m rcpro notion                          # leads to the Notion database (see below)
+python -m rcpro notion [--full]                 # new/changed leads to the Notion database (see below)
 python -m rcpro outreach data/mails.csv --limit 20   # today's mails through the compliance gate, logged
 python -m rcpro optout info@example.be          # after a STOP or unsubscribe
 ```
 
 Notion: with `NOTION_TOKEN` (an internal integration at notion.so/profile/integrations, connected to the database via ••• → Connections) and `NOTION_LEADS_DB` (the database id) in the environment, `run` also updates the Notion database.
 
-Without rights to create an internal integration, use OAuth: create an OAuth connection at notion.so/profile/integrations with redirect URI `http://localhost:8765/callback`, put `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` and `NOTION_LEADS_DB` in `~/.config/rcpro.env` (`chmod 600`, never in git), `source` it, and run `python -m rcpro notion-login` once. In the browser, allow access and pick the leads database. The access and refresh token are written to the same file; an expired token is refreshed during the sync. Only new and changed rows are written; pages are never deleted, so notes added in Notion stay.
+Without rights to create an internal integration, use OAuth: create an OAuth connection at notion.so/profile/integrations with redirect URI `http://localhost:8765/callback`, put `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` and `NOTION_LEADS_DB` in `~/.config/rcpro.env` (`chmod 600`, never in git), `source` it, and run `python -m rcpro notion-login` once. In the browser, allow access and pick the leads database. The access and refresh token are written to the same file; an expired token is refreshed during the sync. Only new and changed rows are written; pages are never deleted, so notes added in Notion stay. What Notion holds is remembered in the table `notion_pages`, so a sync does not read the whole database again; `notion --full` does, e.g. after pages were deleted or synced columns edited by hand in Notion.
 
 The Claude steps by hand (what `run` does automatically); after each import, run `leads` again:
 

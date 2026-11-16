@@ -48,7 +48,7 @@ def test_sync_writes_only_new_and_changed(monkeypatch):
             return {"properties": SCHEMA}
         if path.endswith("/query"):
             return {"results": existing, "has_more": False}
-        return {}
+        return {"id": "p-new"}
 
     monkeypatch.setattr(notion, "_call", fake)
     assert notion.sync(con, "db") == {"created": 1, "updated": 1, "unchanged": 1, "skipped columns": ["founders"]}
@@ -59,6 +59,14 @@ def test_sync_writes_only_new_and_changed(monkeypatch):
     assert created["enterprise_number"] == {"title": [{"text": {"content": "0800.000.003"}}]}
     assert created["postcode"] == {"number": 1000.0} and created["start_date"] == {"date": {"start": "2026-01-07"}}
     assert notion.norm("date", date(2026, 1, 7)) == "2026-01-07"
+
+    calls.clear()  # second run: no full read of Notion, only the changed lead is written
+    con.execute("UPDATE leads SET name = 'Studio A2' WHERE enterprise_number = '0800.000.001'")
+    assert notion.sync(con, "db")["updated"] == 1
+    assert [(m, p) for m, p, b in calls] == [("GET", "/databases/db"), ("PATCH", "/pages/p-0800.000.001")]
+    calls.clear()
+    notion.sync(con, "db", full=True)
+    assert ("POST", "/databases/db/query") in [(m, p) for m, p, b in calls]
 
 
 def test_expired_oauth_token_is_refreshed_and_saved(tmp_path, monkeypatch):

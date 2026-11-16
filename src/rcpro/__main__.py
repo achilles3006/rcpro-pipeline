@@ -11,7 +11,7 @@ Single steps:
     python -m rcpro websites [--limit 200]        # search company websites, newest first, each once
     python -m rcpro staatsblad [--limit 20] [--mailable]  # founding deeds from the Staatsblad, newest first, each once (1 request / 5 s)
     python -m rcpro view                          # leads as a filterable table in the browser
-    python -m rcpro notion                        # leads to the Notion database (NOTION_TOKEN, NOTION_LEADS_DB)
+    python -m rcpro notion [--full]               # new/changed leads to Notion (NOTION_TOKEN, NOTION_LEADS_DB); --full rereads Notion
     python -m rcpro notion-login                  # one-time OAuth consent; tokens go to ~/.config/rcpro.env
     python -m rcpro codes
     python -m rcpro mx                            # MX check of every e-mail domain in leads (email_mx_ok, outreach_email)
@@ -121,7 +121,7 @@ def main():
     sp.add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
     sp.add_argument("--mailable", action="store_true", help="only companies with an outreach_email")
     sub.add_parser("view").add_argument("--html", default="data/leads.html")
-    sub.add_parser("notion")
+    sub.add_parser("notion").add_argument("--full", action="store_true", help="read all of Notion again instead of the local record")
     sub.add_parser("notion-login")
     sub.add_parser("codes")
     sub.add_parser("mx")
@@ -169,7 +169,7 @@ def main():
         print(f"{view.write_html(con, args.html)} leads written to {args.html}")
         view.open_html(args.html)
     elif args.cmd == "notion":
-        print(notion.sync(con))
+        print(notion.sync(con, full=args.full))
     elif args.cmd == "mx":
         print(outreach.check_mx(con))
         outreach.apply(con)
