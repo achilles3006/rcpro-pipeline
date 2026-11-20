@@ -116,9 +116,10 @@ def fetch(con, limit=None, mailable=False):
           AND enterprise_number NOT IN (SELECT d.enterprise_number FROM deeds d JOIN leads l USING (enterprise_number)
                                         WHERE d.pdf_url IS NOT NULL OR d.fetched_at > l.start_date + INTERVAL 60 DAY
                                            OR d.fetched_at > now() - INTERVAL 7 DAY)
-        -- mailable companies first (their deed is read before contact), then engineers without code evidence:
-        -- the purpose clause is the best evidence for them
-        ORDER BY outreach_email IS NOT NULL DESC, segment = 'engineers' AND (mandatory = 'unknown' OR evidence[1] LIKE 'llm:%') DESC,
+        -- mailable companies first (their deed is read before contact), then companies with only a named address
+        -- (a company-name address counts once the deed's founders are known), then engineers without code
+        -- evidence: the purpose clause is the best evidence for them
+        ORDER BY outreach_email IS NOT NULL DESC, personal_email IS NOT NULL DESC, segment = 'engineers' AND (mandatory = 'unknown' OR evidence[1] LIKE 'llm:%') DESC,
                  start_date DESC, enterprise_number
         {"LIMIT " + str(int(limit)) if limit else ""}
     """).fetchall()
@@ -136,16 +137,22 @@ def fetch(con, limit=None, mailable=False):
     return counts
 
 
-def export_deeds(con, path, max_chars=20000):
-    """Write deeds with text that Claude has not read yet to JSONL. Companies only."""
+def export_deeds(con, path, max_chars=20000, mailable=False):
+    """Write deeds with text that Claude has not read yet to JSONL. Companies only. With `mailable`, only companies
+    with an outreach_email or with an address that is the company name (it counts once the founders are known)."""
+    from rcpro.outreach import company_named
+
     tables(con)
-    rows = con.execute("""
-        SELECT d.enterprise_number, l.name, l.segment, d.text
+    rows = con.execute(f"""
+        SELECT d.enterprise_number, l.name, l.segment, d.text{", l.outreach_email, l.personal_email" if mailable else ""}
         FROM deeds d JOIN leads l USING (enterprise_number)
         WHERE l.legal_form_type = 'company' AND d.text IS NOT NULL
           AND d.enterprise_number NOT IN (SELECT enterprise_number FROM deed_extraction)
         ORDER BY 1
     """).fetchall()
+    if mailable:  # Claude costs tokens: read only the deeds that matter for contact
+        rows = [r for r in rows if r[4] or any(company_named(e, r[1], "") for e in (r[5] or "").split("; "))]
+    rows = [r[:4] for r in rows]
     with open(path, "w", encoding="utf-8") as f:
         # ponytail: purpose clause and founders sit in the first pages; raise max_chars if answers miss them
         f.writelines(json.dumps({"enterprise_number": ent, "name": name, "segment": seg, "text": text[:max_chars]},

@@ -21,7 +21,7 @@ Single steps:
 Claude steps one by one (`run` does these with `claude -p`; see README):
     python -m rcpro export-unknown data/unknown.jsonl
     python -m rcpro import-llm data/llm.jsonl     # then run `leads` again
-    python -m rcpro export-deeds data/deeds.jsonl
+    python -m rcpro export-deeds data/deeds.jsonl [--mailable]
     python -m rcpro import-deeds data/deeds_llm.jsonl   # then run `leads` again
     python -m rcpro export-search data/search.jsonl     # companies without e-mail or website
     python -m rcpro import-search data/search_llm.jsonl # checked against the site, then run `leads` again
@@ -134,7 +134,9 @@ def main():
     sub.add_parser("optout").add_argument("email")
     sub.add_parser("export-unknown").add_argument("path")
     sub.add_parser("import-llm").add_argument("path")
-    sub.add_parser("export-deeds").add_argument("path")
+    sp = sub.add_parser("export-deeds")
+    sp.add_argument("path")
+    sp.add_argument("--mailable", action="store_true", help="only deeds of companies with a usable or company-name address")
     sub.add_parser("import-deeds").add_argument("path")
     sub.add_parser("export-search").add_argument("path")
     sub.add_parser("import-search").add_argument("path")
@@ -188,7 +190,7 @@ def main():
     elif args.cmd == "import-llm":
         print(f"{classify.import_llm(con, args.path)} answers stored; run `leads` again to apply them")
     elif args.cmd == "export-deeds":
-        print(f"{staatsblad.export_deeds(con, args.path)} deeds written to {args.path}")
+        print(f"{staatsblad.export_deeds(con, args.path, mailable=args.mailable)} deeds written to {args.path}")
     elif args.cmd == "import-deeds":
         print(f"{staatsblad.import_deeds(con, args.path)} answers stored; run `leads` again to apply them")
     elif args.cmd == "export-search":

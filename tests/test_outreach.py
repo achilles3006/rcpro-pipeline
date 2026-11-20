@@ -80,3 +80,14 @@ def test_mx_answer():
     assert outreach.mx_answer(q + mx)
     assert not outreach.mx_answer(q + bytes.fromhex("c00c 000f 0001 00000e10 0003 0000 00"))
     assert not outreach.mx_answer(bytes.fromhex("1234 8183 0001 0000 0000 0000") + q[12:])
+
+
+def test_company_named_address():
+    named = outreach.company_named
+    assert named("auguline@outlook.be", "AUGULINE BV", "Jan Peeters (zaakvoerder)")
+    assert named("info.rentastudent@gmail.com", "Rent A Student", "")
+    assert not named("giambrone.sara@hotmail.com", "Giambrone Sara Médical", "Sara Giambrone (bestuurder)")  # a person
+    assert not named("auguline@outlook.be", "AUGULINE BV", None)  # deed not read: founders unknown, so not accepted
+    assert not named("jan@gmail.com", "AUGULINE BV", "")
+    assert outreach.pick(["auguline@outlook.be"], name="AUGULINE", founders="") == ("auguline@outlook.be", "kbo")
+    assert outreach.pick(["auguline@outlook.be; info@auguline.be"], name="AUGULINE", founders="")[0] == "info@auguline.be"

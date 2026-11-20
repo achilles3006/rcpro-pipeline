@@ -3,7 +3,8 @@
 A lead is exported only when every rule below holds (see docs/outreach-legal.md):
 - a legal person (company form with legal personality), never a sole trader: art. XII.13 WER and
   KB 4 April 2003 allow advertising e-mail without consent only to legal persons on impersonal addresses;
-- the address (from KBO, the own website or the founding deed) is impersonal (info@, contact@, ...), so no personal data is used: this keeps KB 18 July 2008
+- the address (from KBO, the own website or the founding deed) is impersonal (info@, contact@, ...) or the company name
+  (auguline@outlook.be) with no founder's name in it, so no personal data is used: this keeps KB 18 July 2008
   art. 2 (no KBO personal data for direct marketing) and the GDPR out of the way;
 - sales_angle is not no_outreach, the address is not on the suppression list, the company was never exported.
 Every exported row is logged in `outreach_log` (who, which address, from which source, when).
@@ -15,6 +16,7 @@ import re
 import socket
 import struct
 import tomllib
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
@@ -45,6 +47,29 @@ LAW = {  # legal_basis (classify.py) -> how the mail names it
 def impersonal(email):
     m = re.fullmatch(r"([^@\s]+)@[^@\s]+\.[a-z]{2,}", email.strip().lower())
     return bool(m) and m.group(1) in IMPERSONAL
+
+
+def _letters(text):
+    return re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", text.lower()).encode("ascii", "ignore").decode())
+
+
+LEGAL_FORM_WORDS = {"bv", "bvba", "srl", "sprl", "nv", "sa", "commv", "comm", "v", "scs", "vof", "snc", "cv", "sc"}
+
+
+def company_named(email, name, founders):
+    """The address is the company name (auguline@outlook.be for AUGULINE, info.rentastudent@gmail.com), not a
+    person: no founder's name in it. founders is the leads text "Name (role); ..."; None (deed not read) means
+    the founders are unknown, so the address is not accepted. ponytail: substring match, so a company named
+    after a person not listed as founder slips through; the deed's founders cover the usual case."""
+    if founders is None or not name or "@" not in email:
+        return False
+    local = email.strip().lower().split("@")[0]
+    local = _letters(re.sub(r"^(" + "|".join(sorted(IMPERSONAL, key=len, reverse=True)) + r")[._-]", "", local))
+    company = _letters("".join(w for w in re.split(r"\W+", name.lower()) if w not in LEGAL_FORM_WORDS))
+    if len(local) < 4 or len(company) < 4 or not (local in company or company in local):
+        return False
+    names = {_letters(w) for f in founders.split(";") for w in re.split(r"[\s,]+", f.split("(")[0])}
+    return not any(len(n) >= 3 and n in local for n in names)
 
 
 def mx_answer(resp):
@@ -109,11 +134,13 @@ def check_mx(con, workers=20):
     return counts
 
 
-def pick(addresses, suppressed=frozenset(), no_mx=frozenset()):
-    """The first impersonal address (KBO, then website, then deed) as (email, source), or None."""
+def pick(addresses, suppressed=frozenset(), no_mx=frozenset(), name=None, founders=None):
+    """The first impersonal address (KBO, then website, then deed) as (email, source), or None. An address that
+    is the company name counts as impersonal once the deed's founders are known and none is in it."""
     found = [(e.strip().lower(), src) for src, value in zip(("kbo", "website", "deed"), addresses) for e in (value or "").split(";")]
-    return next(((e, src) for e, src in found if e and impersonal(e) and e not in suppressed
-                 and e.split("@")[1] not in no_mx), None)
+    ok = [(e, src) for e, src in found if e and e not in suppressed and "@" in e and e.split("@")[1] not in no_mx]
+    return next(((e, src) for e, src in ok if impersonal(e)), None) or \
+        next(((e, src) for e, src in ok if company_named(e, name, founders)), None)
 
 
 def apply(con):
@@ -126,14 +153,19 @@ def apply(con):
     no_mx = {d for d, ok in mx.items() if not ok}
     suppressed = {r[0] for r in con.execute("SELECT email FROM suppression").fetchall()}
     blocked = {r[0] for r in con.execute("SELECT enterprise_number FROM suppression WHERE enterprise_number IS NOT NULL").fetchall()}
+    has = {c[0] for c in con.execute("DESCRIBE leads").fetchall()}
+    deed_read = ("CASE WHEN activity_summary IS NOT NULL OR founders IS NOT NULL THEN coalesce(founders, '') END"
+                 if {"founders", "activity_summary"} <= has else "NULL")  # founders known once Claude read the deed
     rows = []
-    for ent, ok_form, *addresses in con.execute(f"""
+    for ent, ok_form, name, founders, *addresses in con.execute(f"""
             SELECT enterprise_number, legal_form_type = 'company' AND sales_angle <> 'no_outreach'
-                   AND juridical_form IN ({", ".join("?" * len(LEGAL_PERSON_FORMS))}), email, site_email, deed_email
+                   AND juridical_form IN ({", ".join("?" * len(LEGAL_PERSON_FORMS))}), name,
+                   {deed_read},
+                   email, site_email, deed_email
             FROM leads""", sorted(LEGAL_PERSON_FORMS)).fetchall():
         checked = [mx[d] for v in addresses for d in _domains(v) if d in mx]
-        hit = ok_form and ent not in blocked and pick(addresses, suppressed, no_mx)
-        personal = sorted({e.strip().lower() for v in addresses for e in (v or "").split(";") if "@" in e and not impersonal(e)})
+        hit = ok_form and ent not in blocked and pick(addresses, suppressed, no_mx, name, founders)
+        personal = sorted({e.strip().lower() for v in addresses for e in (v or "").split(";") if "@" in e and not impersonal(e)} - {hit and hit[0]})
         rows.append((ent, any(checked) if checked else None, hit[0] if hit else None,
                      "; ".join(personal) if ok_form and personal else None))
     con.execute("""CREATE OR REPLACE TEMP TABLE mail_check (enterprise_number VARCHAR, email_mx_ok BOOLEAN,
