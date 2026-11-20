@@ -168,12 +168,42 @@ def write(kind, value, options):
     return {kind: value}
 
 
-def sync(con, database=None, full=False):
-    """Create or update a page per lead, newest first. Returns {created, updated, unchanged, skipped columns}.
+def query(database, where):
+    """All rows matching a filter; Notion stops at 10,000, so a result that size is incomplete."""
+    got, cursor = [], None
+    while True:
+        r = _call("POST", f"/databases/{database}/query",
+                  {"page_size": 100, "filter": where, **({"start_cursor": cursor} if cursor else {})})
+        got += r["results"]
+        if not r["has_more"]:
+            return got
+        cursor = r["next_cursor"]
+
+
+def read_all(con, database, key, since=None):
+    """Every page of the database (from `since` on), one list per start_date: a Notion query returns at most 10,000 rows."""
+    days = [d.isoformat() for (d,) in con.execute("SELECT DISTINCT start_date FROM leads WHERE start_date >= ? ORDER BY 1",
+                                                  [since or "0001-01-01"]).fetchall()]
+    for f in [{"date": {"equals": d}} for d in days] + ([] if since else [{"date": {"is_empty": True}}]):
+        day = {"property": "start_date", **f}
+        got = query(database, day)
+        if len(got) >= 10000:  # a busy day: split it on the last digit of the enterprise number
+            parts = [query(database, {"and": [day, {"property": key, "title": {"ends_with": d}}]}) for d in "0123456789"]
+            if max(map(len, parts)) >= 10000:
+                raise RuntimeError(f"Notion returned 10,000 rows for start_date {f}; rows may be missing")
+            got = [p for part in parts for p in part]
+        print(f["date"], len(got), flush=True)  # progress: a full read takes hours on a large database
+        yield got
+
+
+def sync(con, database=None, full=False, since=None):
+    """Create or update a page per lead, newest first. Returns {created, updated, unchanged, archived, skipped columns}.
 
     What Notion holds is remembered in the table notion_pages, so a run sends only new and changed
     leads. Notion is read in full only on the first run or with full=True (`notion --full`), e.g.
-    after pages were deleted or columns edited by hand in Notion.
+    after pages were deleted or columns edited by hand in Notion. A full read keeps the oldest page per
+    enterprise number and archives the other copies. With since ("2026-11-01") only leads that started on
+    or after that day are read and written, without the local record: quick, for the top of the list.
     """
     database = database or os.environ["NOTION_LEADS_DB"]
     schema = _call("GET", f"/databases/{database}")["properties"]
@@ -185,24 +215,28 @@ def sync(con, database=None, full=False):
     con.execute("CREATE TABLE IF NOT EXISTS notion_pages (enterprise_number VARCHAR PRIMARY KEY, page_id VARCHAR, data VARCHAR)")
     if full:
         con.execute("DELETE FROM notion_pages")
-    known = {k: (pid, json.loads(d)) for k, pid, d in con.execute("SELECT * FROM notion_pages").fetchall()}
-    if not known:  # first run or --full: read what Notion holds
-        cursor = None
-        while True:
-            r = _call("POST", f"/databases/{database}/query", {"page_size": 100, **({"start_cursor": cursor} if cursor else {})})
-            for p in r["results"]:
-                have = {c: norm(k, read(p["properties"][c])) for c, k in kinds.items() if c in p["properties"]}
-                known[have[key]] = (p["id"], have)
-            if not r["has_more"]:
-                break
-            cursor = r["next_cursor"]
-        con.executemany("INSERT INTO notion_pages VALUES (?, ?, ?)",
-                        [[k, pid, json.dumps(have)] for k, (pid, have) in known.items()])
+    known = {} if since else {k: (pid, json.loads(d)) for k, pid, d in con.execute("SELECT * FROM notion_pages").fetchall()}
+    archived = 0
+    if not known:  # first run, --full or since: read what Notion holds
+        extra = []
+        for p in (p for got in read_all(con, database, key, since) for p in sorted(got, key=lambda p: p["created_time"])):  # oldest wins
+            have = {c: norm(k, read(p["properties"][c])) for c, k in kinds.items() if c in p["properties"]}
+            if have.get(key) in known:
+                extra.append(p["id"])
+            else:
+                known[have.get(key)] = (p["id"], have)
+        if not since:  # a partial read must not become the record: the next run would miss the rest
+            con.executemany("INSERT INTO notion_pages VALUES (?, ?, ?)",
+                            [[k, pid, json.dumps(have)] for k, (pid, have) in known.items()])
+        for page_id in extra:  # copies made by earlier runs that saw only 10,000 rows; restorable from Notion's trash
+            _call("PATCH", f"/pages/{page_id}", {"archived": True})
+            archived += 1
 
-    counts = {"created": 0, "updated": 0, "unchanged": 0, "skipped columns": [c for c in columns if c not in kinds]}
+    counts = {"created": 0, "updated": 0, "unchanged": 0, "archived": archived, "skipped columns": [c for c in columns if c not in kinds]}
     lists = {c[0] for c in con.execute("DESCRIBE leads").fetchall() if c[1].endswith("[]")}
     select = ", ".join(f"CAST({c} AS VARCHAR)" if c in lists else c for c in kinds)  # lists as leads.csv writes them
-    for row in con.execute(f"SELECT {select} FROM leads ORDER BY start_date DESC").fetchall():
+    for row in con.execute(f"SELECT {select} FROM leads WHERE ? IS NULL OR start_date >= ? ORDER BY start_date DESC",
+                           [since, since]).fetchall():
         want = {c: norm(k, v) for (c, k), v in zip(kinds.items(), row)}
         if want[key] in known:
             page_id, have = known[want[key]]
@@ -217,5 +251,6 @@ def sync(con, database=None, full=False):
             page_id = _call("POST", "/pages", {"parent": {"database_id": database},
                                                "properties": {c: write(kinds[c], v, options.get(c, {})) for c, v in want.items()}})["id"]
             counts["created"] += 1
-        con.execute("INSERT OR REPLACE INTO notion_pages VALUES (?, ?, ?)", [want[key], page_id, json.dumps(want)])
+        if not since:
+            con.execute("INSERT OR REPLACE INTO notion_pages VALUES (?, ?, ?)", [want[key], page_id, json.dumps(want)])
     return counts

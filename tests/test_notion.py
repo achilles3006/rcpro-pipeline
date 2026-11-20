@@ -17,9 +17,9 @@ SCHEMA = {
 }
 
 
-def page(ent, name, postcode, dm, basis, start, evidence):
+def page(ent, name, postcode, dm, basis, start, evidence, created="2026-01-10", copy=""):
     text = lambda s: [{"plain_text": s}] if s else []
-    return {"id": f"p-{ent}", "properties": {
+    return {"id": f"p-{ent}{copy}", "created_time": created, "properties": {
         "enterprise_number": {"type": "title", "title": text(ent)},
         "name": {"type": "rich_text", "rich_text": text(name)},
         "postcode": {"type": "number", "number": postcode},
@@ -39,20 +39,23 @@ def test_sync_writes_only_new_and_changed(monkeypatch):
         ('0800.000.002', 'Fiduciaire B', '2000', true, 'Act of 17 March 2019, art. 44', '2026-01-06', ['69200 MAIN'], 'X'),
         ('0800.000.003', 'New C', '1000', true, NULL, '2026-01-07', [], NULL)""")
     existing = [page("0800.000.001", "Studio A", 9000.0, True, None, "2026-01-05", "[71111 MAIN]"),  # unchanged
-                page("0800.000.002", "Fiduciaire B", 2000.0, True, None, "2026-01-06", "")]  # basis and evidence new
+                page("0800.000.002", "Fiduciaire B", 2000.0, True, None, "2026-01-06", ""),  # basis and evidence new
+                page("0800.000.001", "Studio A", 9000.0, True, None, "2026-01-05", "[71111 MAIN]", "2026-01-11", "-copy")]
     calls = []
 
     def fake(method, path, body=None):
         calls.append((method, path, body))
         if method == "GET":
             return {"properties": SCHEMA}
-        if path.endswith("/query"):
-            return {"results": existing, "has_more": False}
+        if path.endswith("/query"):  # filtered per start_date, like Notion
+            want = body["filter"]["date"].get("equals")
+            return {"results": [p for p in existing if p["properties"]["start_date"]["date"]["start"] == want], "has_more": False}
         return {"id": "p-new"}
 
     monkeypatch.setattr(notion, "_call", fake)
-    assert notion.sync(con, "db") == {"created": 1, "updated": 1, "unchanged": 1, "skipped columns": ["founders"]}
-    writes = {m: b for m, p, b in calls if m in ("PATCH", "POST") and not p.endswith("/query")}
+    assert notion.sync(con, "db") == {"created": 1, "updated": 1, "unchanged": 1, "archived": 1, "skipped columns": ["founders"]}
+    assert ("PATCH", "/pages/p-0800.000.001-copy", {"archived": True}) in calls  # the newer copy goes, the oldest stays
+    writes = {m: b for m, p, b in calls if m in ("PATCH", "POST") and not p.endswith("/query") and b != {"archived": True}}
     assert writes["PATCH"]["properties"] == {"legal_basis": {"select": {"id": "a44"}},  # by id: name has a comma
                                              "evidence": {"rich_text": [{"text": {"content": "[69200 MAIN]"}}]}}
     created = writes["POST"]["properties"]
@@ -64,6 +67,11 @@ def test_sync_writes_only_new_and_changed(monkeypatch):
     con.execute("UPDATE leads SET name = 'Studio A2' WHERE enterprise_number = '0800.000.001'")
     assert notion.sync(con, "db")["updated"] == 1
     assert [(m, p) for m, p, b in calls] == [("GET", "/databases/db"), ("PATCH", "/pages/p-0800.000.001")]
+    calls.clear()  # since: only that day is read and written, and the record stays as it was
+    record = con.execute("SELECT * FROM notion_pages ORDER BY 1").fetchall()
+    assert notion.sync(con, "db", since="2026-01-07")["created"] == 1
+    assert [p for m, p, b in calls if m == "POST"] == ["/databases/db/query", "/pages"]
+    assert con.execute("SELECT * FROM notion_pages ORDER BY 1").fetchall() == record
     calls.clear()
     notion.sync(con, "db", full=True)
     assert ("POST", "/databases/db/query") in [(m, p) for m, p, b in calls]

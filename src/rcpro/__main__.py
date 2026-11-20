@@ -121,7 +121,9 @@ def main():
     sp.add_argument("--limit", type=int, help="fetch at most this many companies, newest first")
     sp.add_argument("--mailable", action="store_true", help="only companies with an outreach_email")
     sub.add_parser("view").add_argument("--html", default="data/leads.html")
-    sub.add_parser("notion").add_argument("--full", action="store_true", help="read all of Notion again instead of the local record")
+    sp = sub.add_parser("notion")
+    sp.add_argument("--full", action="store_true", help="read all of Notion again instead of the local record")
+    sp.add_argument("--since", help="only leads that started on or after this day (YYYY-MM-DD), read fresh from Notion")
     sub.add_parser("notion-login")
     sub.add_parser("codes")
     sub.add_parser("mx")
@@ -169,7 +171,7 @@ def main():
         print(f"{view.write_html(con, args.html)} leads written to {args.html}")
         view.open_html(args.html)
     elif args.cmd == "notion":
-        print(notion.sync(con, full=args.full))
+        print(notion.sync(con, full=args.full, since=args.since))
     elif args.cmd == "mx":
         print(outreach.check_mx(con))
         outreach.apply(con)

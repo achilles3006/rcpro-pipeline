@@ -13,9 +13,13 @@ python -m rcpro mx
 python -m rcpro staatsblad --mailable --limit 200
 python -m rcpro export-deeds data/deeds.jsonl
 if [[ -s data/deeds.jsonl ]]; then
-  python -c "from rcpro import llm; llm.run('extract_deeds.md', 'data/deeds.jsonl', 'data/deeds_llm.jsonl')"  # in batches of 10
-  python -m rcpro import-deeds data/deeds_llm.jsonl
+  # a failing Claude (e.g. login expired) must not stop leads.csv and Notion; the deeds wait for the next night
+  if python -c "from rcpro import llm; llm.run('extract_deeds.md', 'data/deeds.jsonl', 'data/deeds_llm.jsonl')"; then  # in batches of 10
+    python -m rcpro import-deeds data/deeds_llm.jsonl
+  else
+    echo "!! deed extraction failed (claude -p); continuing without it"
+  fi
 fi
 python -m rcpro leads --csv data/leads.csv | tail -1
-python -m rcpro notion
+python -m rcpro notion --since "$(date -v-14d +%F)"  # last two weeks only, until `notion --full` has cleaned up the duplicates
 echo "== done $(date '+%F %T')"
